@@ -1,0 +1,15 @@
+.dashboard-sites__grid {
+  grid-auto-rows: max-content;
+}
+
+.dashboard-site-card {
+  min-height: 280px;
+}
+
+.dashboard-site-card__header,
+.dashboard-site-card__metrics,
+.dashboard-site-card__progress,
+.dashboard-site-card__unlimited,
+.dashboard-site-card__actions {
+  flex: 0 0 auto;
+}

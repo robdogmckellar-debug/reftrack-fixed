@@ -7,6 +7,7 @@ import './styles/design-system.css';
 import './styles/shell.css';
 import './styles/accessibility.css';
 import './styles/dashboard.css';
+import './styles/dashboard-card-layout.css';
 import './styles/site-editor.css';
 import './styles/statistics.css';
 import './styles/settings.css';

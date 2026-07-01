@@ -1,5 +1,6 @@
 .dashboard-sites__grid {
   grid-auto-rows: minmax(280px, auto);
+  grid-auto-rows: max-content;
 }
 
 .dashboard-site-card {

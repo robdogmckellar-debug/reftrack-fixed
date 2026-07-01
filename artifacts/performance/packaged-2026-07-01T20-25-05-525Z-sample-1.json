@@ -1,0 +1,121 @@
+{
+  "reportVersion": 2,
+  "generatedAt": "2026-07-01T20:25:08.142Z",
+  "application": {
+    "name": "reftrack",
+    "version": "2.0.0",
+    "packaged": true
+  },
+  "runtime": {
+    "platform": "win32",
+    "architecture": "x64",
+    "electron": "42.5.1",
+    "chrome": "148.0.7778.271",
+    "node": "24.17.0",
+    "v8": "14.8.178.33-electron.0"
+  },
+  "milestones": {
+    "mainModuleLoadedMs": 0,
+    "appReadyMs": 29.78,
+    "createWindowStartedMs": 81.92,
+    "windowCreatedMs": 123.25,
+    "domReadyMs": 271.54,
+    "didFinishLoadMs": 287.24,
+    "readyToShowMs": 287.96,
+    "dashboardUsableMs": 328.02,
+    "settledSampleMs": 2328.79
+  },
+  "dashboard": {
+    "ready": true,
+    "cards": 9,
+    "rendererElapsedMs": 204.40000000223517
+  },
+  "rendererMetrics": {
+    "navigation": {
+      "domContentLoaded": 146.80000000074506,
+      "loadEventEnd": 148.10000000149012
+    },
+    "paints": {
+      "first-paint": 324,
+      "first-contentful-paint": 324
+    },
+    "longTasks": []
+  },
+  "processIds": {
+    "main": 20040,
+    "renderer": 7992
+  },
+  "memory": {
+    "mainProcessKb": {
+      "residentSet": 116480,
+      "private": 85292,
+      "shared": 540
+    },
+    "applicationProcesses": [
+      {
+        "type": "Browser",
+        "pid": 20040,
+        "serviceName": null,
+        "name": null,
+        "cpu": {
+          "cumulativeCPUUsage": 0.421875,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "memory": {
+          "workingSetSize": 117120,
+          "peakWorkingSetSize": 117120,
+          "privateBytes": 85576
+        }
+      },
+      {
+        "type": "GPU",
+        "pid": 17728,
+        "serviceName": "GPU",
+        "name": null,
+        "cpu": {
+          "cumulativeCPUUsage": 0.65625,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "memory": {
+          "workingSetSize": 148372,
+          "peakWorkingSetSize": 150480,
+          "privateBytes": 123988
+        }
+      },
+      {
+        "type": "Utility",
+        "pid": 11812,
+        "serviceName": "network.mojom.NetworkService",
+        "name": "Network Service",
+        "cpu": {
+          "cumulativeCPUUsage": 0.109375,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "memory": {
+          "workingSetSize": 49144,
+          "peakWorkingSetSize": 49144,
+          "privateBytes": 12812
+        }
+      },
+      {
+        "type": "Tab",
+        "pid": 7992,
+        "serviceName": null,
+        "name": null,
+        "cpu": {
+          "cumulativeCPUUsage": 0.328125,
+          "percentCPUUsage": 0,
+          "idleWakeupsPerSecond": 0
+        },
+        "memory": {
+          "workingSetSize": 99284,
+          "peakWorkingSetSize": 99544,
+          "privateBytes": 45600
+        }
+      }
+    ]
+  }
+}

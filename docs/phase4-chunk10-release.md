@@ -20,6 +20,12 @@ Only the compiled `out` tree, runtime icon, production package metadata, and pro
 
 The release configuration enables ASAR integrity and requires code to load from `app.asar`. It disables Electron-as-Node, Node option environment variables, CLI inspector arguments, and the extra privileges historically granted to `file://`. Cookie encryption remains enabled. RefTrack continues to use its private `reftrack://` application protocol.
 
+### Playwright automation without weakening the release
+
+Playwright's Electron driver requires Electron's main-process CLI inspector. The shipped RefTrack executable deliberately keeps that fuse disabled. The packaged smoke and accessibility scripts therefore copy `dist\win-unpacked` to a temporary QA directory, enable only `EnableNodeCliInspectArguments` in that disposable copy, use a temporary user-data directory, run automation, and delete the copy afterward. `npm run verify:package` continues to require the inspector fuse to be disabled in the actual release executable.
+
+The Playwright scripts use `dist\win-unpacked\RefTrack.exe`, not the portable self-extracting wrapper. They also enable `DEBUG=pw:browser*` during launch and write a diagnostic JSON report if Playwright cannot attach.
+
 ## Automated Windows release pipeline
 
 Run on Windows 11 x64:

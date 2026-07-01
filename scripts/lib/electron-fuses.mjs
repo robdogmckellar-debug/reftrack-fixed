@@ -1,8 +1,13 @@
 import electronFuses from '@electron/fuses';
 
-const { FuseV1Options, getCurrentFuseWire } = electronFuses;
+const { FuseVersion, FuseV1Options, flipFuses, getCurrentFuseWire } = electronFuses;
 
-if (!FuseV1Options || typeof getCurrentFuseWire !== 'function') {
+if (
+  !FuseVersion ||
+  !FuseV1Options ||
+  typeof flipFuses !== 'function' ||
+  typeof getCurrentFuseWire !== 'function'
+) {
   throw new Error('The installed @electron/fuses package does not expose the expected API.');
 }
 
@@ -14,4 +19,4 @@ const FuseWireState = Object.freeze({
   ENABLE: '1'.charCodeAt(0),
 });
 
-export { FuseV1Options, FuseWireState, getCurrentFuseWire };
+export { FuseVersion, FuseV1Options, FuseWireState, flipFuses, getCurrentFuseWire };

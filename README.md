@@ -1,7 +1,13 @@
-# Windows verify symlink test fix
+# RefTrack packaged smoke report fix
 
-This correction changes the image-cleaner linked-folder test to create an NTFS directory junction on Windows and a normal directory symlink on other platforms.
+Replace the included files in the project while preserving their relative paths.
 
-It removes the need for Windows Developer Mode or an elevated terminal during `npm run verify` while preserving coverage that linked folders are rejected.
+This correction fixes two false failures in the packaged smoke test:
 
-No production application code or runtime behaviour changed.
+- screen-aware document titles such as `Dashboard · RefTrack` are now expected;
+- production DevTools are verified by attempting to open them and confirming the
+  view remains closed, rather than relying on an omitted `getLastWebPreferences()`
+  field.
+
+No production application source, security configuration, data model, or UI
+behaviour was changed.

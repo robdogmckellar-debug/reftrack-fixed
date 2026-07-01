@@ -1,0 +1,82 @@
+{
+  "generatedAt": "2026-07-01T19:40:06.031Z",
+  "sourceExecutablePath": "C:\\reftrack-fixed\\dist\\win-unpacked\\RefTrack.exe",
+  "automationExecutablePath": "C:\\Users\\pataz\\AppData\\Local\\Temp\\reftrack-playwright-runtime-opCJ6V\\win-unpacked\\RefTrack.exe",
+  "automationUserDataDirectory": "C:\\Users\\pataz\\AppData\\Local\\Temp\\reftrack-playwright-runtime-opCJ6V\\user-data",
+  "productionInspectorEnabled": false,
+  "automationInspectorEnabled": true,
+  "playwrightLaunchStderrCharacters": 1428,
+  "elapsedMs": 9594,
+  "title": "Dashboard · RefTrack",
+  "preloadSurface": {
+    "available": true,
+    "sections": [
+      "actions",
+      "activity",
+      "app",
+      "bootstrap",
+      "external",
+      "imageCleaner",
+      "importer",
+      "notifications",
+      "settings",
+      "sites",
+      "tasks"
+    ]
+  },
+  "runtime": {
+    "isPackaged": true,
+    "version": "2.0.0",
+    "windowCount": 1,
+    "webPreferences": {
+      "nodeIntegration": false,
+      "contextIsolation": true,
+      "sandbox": true,
+      "webSecurity": true
+    }
+  },
+  "screenResults": [
+    {
+      "screen": "Dashboard",
+      "selected": "true",
+      "visible": true
+    },
+    {
+      "screen": "Site Editor",
+      "selected": "true",
+      "visible": true
+    },
+    {
+      "screen": "Statistics",
+      "selected": "true",
+      "visible": true
+    },
+    {
+      "screen": "Settings",
+      "selected": "true",
+      "visible": true
+    },
+    {
+      "screen": "Daily Tasks",
+      "selected": "true",
+      "visible": true
+    }
+  ],
+  "layout": {
+    "width": 900,
+    "scrollWidth": 900,
+    "horizontalOverflow": false
+  },
+  "secondExit": {
+    "exited": true,
+    "code": 0
+  },
+  "windowCountAfterSecondLaunch": 1,
+  "consoleErrors": [],
+  "pageErrors": [],
+  "failures": [
+    "Unexpected document title: Dashboard · RefTrack",
+    "DevTools are enabled in production."
+  ],
+  "status": "failed"
+}

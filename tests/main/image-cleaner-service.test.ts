@@ -31,6 +31,10 @@ function jpegBytes(): Buffer {
   return Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0]);
 }
 
+async function noProtectedFileNames(): Promise<ReadonlySet<string>> {
+  return new Set<string>();
+}
+
 afterEach(async () => {
   await Promise.all(
     temporaryDirectories
@@ -57,6 +61,7 @@ describe('safe image cleaner', () => {
       },
       homeDirectory: os.homedir(),
       environment: {},
+      getProtectedFileNames: noProtectedFileNames,
     });
 
     const result = await cleaner.cleanFolder(directory);
@@ -129,6 +134,7 @@ describe('safe image cleaner', () => {
       },
       homeDirectory: os.homedir(),
       environment: {},
+      getProtectedFileNames: noProtectedFileNames,
     });
 
     const result = await cleaner.cleanFolder(directory);
@@ -187,6 +193,7 @@ describe('image cleanup coordinator', () => {
       trashItem: async () => trashGate,
       homeDirectory: os.homedir(),
       environment: {},
+      getProtectedFileNames: noProtectedFileNames,
     });
     const completed = vi.fn();
     const coordinator = new ImageCleanupCoordinator({

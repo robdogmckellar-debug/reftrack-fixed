@@ -1,0 +1,64 @@
+{
+  "generatedAt": "2026-07-01T20:25:04.365Z",
+  "sourceExecutablePath": "C:\\reftrack-fixed\\dist\\win-unpacked\\RefTrack.exe",
+  "automationExecutablePath": "C:\\Users\\pataz\\AppData\\Local\\Temp\\reftrack-playwright-runtime-hDcy7y\\win-unpacked\\RefTrack.exe",
+  "automationUserDataDirectory": "C:\\Users\\pataz\\AppData\\Local\\Temp\\reftrack-playwright-runtime-hDcy7y\\user-data",
+  "productionInspectorEnabled": false,
+  "automationInspectorEnabled": true,
+  "playwrightLaunchStderrCharacters": 1427,
+  "standard": "WCAG 2.2 AA automated axe-core rules",
+  "audits": [
+    {
+      "name": "Dashboard",
+      "violations": [],
+      "passes": 25,
+      "incomplete": 2
+    },
+    {
+      "name": "Site Editor",
+      "violations": [],
+      "passes": 27,
+      "incomplete": 2
+    },
+    {
+      "name": "Statistics",
+      "violations": [],
+      "passes": 26,
+      "incomplete": 2
+    },
+    {
+      "name": "Settings",
+      "violations": [],
+      "passes": 27,
+      "incomplete": 3
+    },
+    {
+      "name": "Daily Tasks",
+      "violations": [],
+      "passes": 24,
+      "incomplete": 3
+    },
+    {
+      "name": "New Daily Tasks category dialog",
+      "violations": [],
+      "passes": 26,
+      "incomplete": 3
+    },
+    {
+      "name": "Partner importer dialog",
+      "violations": [],
+      "passes": 28,
+      "incomplete": 3
+    }
+  ],
+  "violationCount": 0,
+  "violations": [],
+  "status": "passed",
+  "manualChecksStillRequired": [
+    "Windows Narrator reading order and control names",
+    "Keyboard-only completion of every workflow",
+    "125%, 150%, and 200% Windows display scaling",
+    "Windows forced-colour mode",
+    "Reduced-motion mode"
+  ]
+}

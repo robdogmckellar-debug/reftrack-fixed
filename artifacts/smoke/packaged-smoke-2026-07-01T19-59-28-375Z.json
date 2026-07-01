@@ -1,0 +1,88 @@
+{
+  "generatedAt": "2026-07-01T19:59:28.374Z",
+  "sourceExecutablePath": "C:\\reftrack-fixed\\dist\\win-unpacked\\RefTrack.exe",
+  "automationExecutablePath": "C:\\Users\\pataz\\AppData\\Local\\Temp\\reftrack-playwright-runtime-DqLwHy\\win-unpacked\\RefTrack.exe",
+  "automationUserDataDirectory": "C:\\Users\\pataz\\AppData\\Local\\Temp\\reftrack-playwright-runtime-DqLwHy\\user-data",
+  "productionInspectorEnabled": false,
+  "automationInspectorEnabled": true,
+  "playwrightLaunchStderrCharacters": 1428,
+  "elapsedMs": 7575,
+  "title": "Dashboard · RefTrack",
+  "preloadSurface": {
+    "available": true,
+    "sections": [
+      "actions",
+      "activity",
+      "app",
+      "bootstrap",
+      "external",
+      "imageCleaner",
+      "importer",
+      "notifications",
+      "settings",
+      "sites",
+      "tasks"
+    ]
+  },
+  "runtime": {
+    "isPackaged": true,
+    "version": "2.0.0",
+    "windowCount": 1,
+    "webPreferences": {
+      "nodeIntegration": false,
+      "contextIsolation": true,
+      "sandbox": true,
+      "webSecurity": true
+    }
+  },
+  "devToolsProbe": {
+    "initiallyOpen": false,
+    "openedAfterRequest": false
+  },
+  "screenResults": [
+    {
+      "screen": "Dashboard",
+      "selected": "true",
+      "visible": true,
+      "documentTitle": "Dashboard · RefTrack"
+    },
+    {
+      "screen": "Site Editor",
+      "selected": "true",
+      "visible": true,
+      "documentTitle": "Site Editor · RefTrack"
+    },
+    {
+      "screen": "Statistics",
+      "selected": "true",
+      "visible": true,
+      "documentTitle": "Statistics · RefTrack"
+    },
+    {
+      "screen": "Settings",
+      "selected": "true",
+      "visible": true,
+      "documentTitle": "Settings · RefTrack"
+    },
+    {
+      "screen": "Daily Tasks",
+      "selected": "true",
+      "visible": true,
+      "documentTitle": "Daily Tasks · RefTrack"
+    }
+  ],
+  "layout": {
+    "width": 900,
+    "scrollWidth": 900,
+    "horizontalOverflow": false
+  },
+  "secondExit": {
+    "exited": true,
+    "code": 0
+  },
+  "windowCountAfterSecondLaunch": 1,
+  "consoleErrors": [],
+  "pageErrors": [],
+  "failures": [],
+  "status": "passed"
+}

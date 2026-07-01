@@ -1,22 +1,43 @@
 import path from 'node:path';
 
-import AxeBuilder from '@axe-core/playwright';
-import { _electron as electron } from '@playwright/test';
-
 import {
   ensureArtifactDirectory,
   requireWindowsHost,
-  resolvePackagedExecutable,
   timestampForFilename,
   writeJson,
 } from './lib/packaged-app.mjs';
+import {
+  getPlaywrightLaunchDiagnostics,
+  launchPackagedAppForPlaywright,
+} from './lib/playwright-packaged-runtime.mjs';
 
 requireWindowsHost();
-const executablePath = resolvePackagedExecutable();
-const electronApp = await electron.launch({ executablePath });
+let launched;
+try {
+  launched = await launchPackagedAppForPlaywright();
+} catch (error) {
+  const directory = await ensureArtifactDirectory('accessibility');
+  const reportPath = path.join(
+    directory,
+    `packaged-accessibility-launch-failure-${timestampForFilename()}.json`,
+  );
+  await writeJson(reportPath, {
+    generatedAt: new Date().toISOString(),
+    status: 'launch-failed',
+    diagnostics: getPlaywrightLaunchDiagnostics(error),
+  });
+  throw new Error(`Packaged accessibility launch failed. See ${reportPath}`, { cause: error });
+}
+
+const { electronApp, runtime, launchStderr } = launched;
+const executablePath = runtime.executablePath;
+const { default: AxeBuilder } = await import('@axe-core/playwright');
 
 async function analyse(page, name) {
   const result = await new AxeBuilder({ page })
+    // Electron's Playwright context cannot create the auxiliary page used by
+    // axe's default analysis mode, so use the compatible in-page mode.
+    .setLegacyMode()
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
     .analyze();
   return {
@@ -63,7 +84,12 @@ try {
   );
   const report = {
     generatedAt: new Date().toISOString(),
-    executablePath,
+    sourceExecutablePath: runtime.sourceExecutablePath,
+    automationExecutablePath: executablePath,
+    automationUserDataDirectory: runtime.userDataDirectory,
+    productionInspectorEnabled: runtime.sourceInspectorEnabled,
+    automationInspectorEnabled: runtime.automationInspectorEnabled,
+    playwrightLaunchStderrCharacters: launchStderr.length,
     standard: 'WCAG 2.2 AA automated axe-core rules',
     audits,
     violationCount: violations.length,
@@ -86,5 +112,6 @@ try {
     );
   console.log(`Packaged accessibility audit passed: ${reportPath}`);
 } finally {
-  await electronApp.close();
+  await electronApp.close().catch(() => undefined);
+  await runtime.cleanup();
 }

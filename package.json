@@ -1,0 +1,73 @@
+{
+  "name": "reftrack",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Local referral link manager and earnings tracker for Windows 11",
+  "main": "out/main/index.js",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "electron-vite dev",
+    "dev": "electron-vite dev --watch",
+    "build:app": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package:dir": "npm run build:app && electron-builder --win dir --x64 --publish never",
+    "package:win": "npm run build:app && electron-builder --win --x64 --publish never",
+    "release:win": "npm run verify && npm run package:win && npm run verify:package && npm run test:smoke:packaged && npm run test:a11y:packaged && npm run perf:packaged && npm run release:manifest",
+    "build": "npm run package:win",
+    "build:win": "npm run package:win",
+    "verify:package": "node scripts/verify-packaged-app.mjs",
+    "test:smoke:packaged": "node scripts/run-packaged-smoke.mjs",
+    "test:a11y:packaged": "node scripts/run-packaged-accessibility.mjs",
+    "perf:baseline": "npm run build:app && node scripts/run-performance-baseline.cjs",
+    "perf:packaged": "node scripts/run-packaged-performance.mjs",
+    "perf:compare": "node scripts/compare-performance.mjs",
+    "release:manifest": "node scripts/create-release-manifest.mjs",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run build:app",
+    "audit:dependencies": "npm audit --audit-level=high"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
+    "@electron/asar": "3.4.1",
+    "@electron/fuses": "1.8.0",
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.61.1",
+    "@preact/preset-vite": "2.10.5",
+    "@testing-library/preact": "3.2.4",
+    "@testing-library/user-event": "14.6.1",
+    "@types/node": "24.13.2",
+    "electron": "42.5.1",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "eslint": "10.6.0",
+    "globals": "17.7.0",
+    "jsdom": "29.1.1",
+    "playwright": "1.61.1",
+    "prettier": "3.9.4",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.62.1",
+    "vite": "7.3.6",
+    "vitest": "4.1.9"
+  },
+  "dependencies": {
+    "@preact/signals": "2.9.2",
+    "parse5": "8.0.1",
+    "preact": "10.29.3",
+    "zod": "4.4.3"
+  },
+  "author": {
+    "name": "RefTrack"
+  },
+  "license": "UNLICENSED",
+  "allowScripts": {
+    "electron-winstaller@5.4.0": true,
+    "esbuild@0.25.12": true
+  }
+}

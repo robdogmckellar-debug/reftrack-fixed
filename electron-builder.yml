@@ -1,0 +1,67 @@
+appId: com.reftrack.app
+productName: RefTrack
+copyright: Copyright © 2026 RefTrack
+
+asar:
+  smartUnpack: true
+
+compression: normal
+npmRebuild: false
+
+files:
+  - out/**/*
+  - assets/icon.png
+  - package.json
+  # Strip source maps from both compiled output and production dependencies.
+  # They are not required at runtime and the release verifier intentionally rejects them.
+  - '!**/*.map'
+
+extraMetadata:
+  main: out/main/index.js
+
+directories:
+  output: dist
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  icon: assets/icon.ico
+  executableName: RefTrack
+  requestedExecutionLevel: asInvoker
+  electronLanguages:
+    - en-US
+
+nsis:
+  oneClick: false
+  perMachine: false
+  selectPerMachineByDefault: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: RefTrack
+  uninstallDisplayName: RefTrack
+  deleteAppDataOnUninstall: false
+  packElevateHelper: false
+  artifactName: RefTrack-Setup-${version}-${arch}.${ext}
+
+portable:
+  requestExecutionLevel: user
+  artifactName: RefTrack-Portable-${version}-${arch}.${ext}
+
+# electron-builder generates the Windows ASAR integrity resource before the
+# executable is finalised, then flips these package-time Electron fuses.
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  loadBrowserProcessSpecificV8Snapshot: false
+  grantFileProtocolExtraPrivileges: false

@@ -1,0 +1,50 @@
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+}
+
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring) !important;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+[aria-busy='true'] {
+  cursor: progress;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .app-brand__mark,
+  .app-nav__list,
+  .tab-btn.app-nav__item,
+  .ui-button,
+  .status-message {
+    border-color: CanvasText;
+  }
+
+  .tab-btn.app-nav__item[aria-selected='true'] {
+    outline: 2px solid Highlight;
+    color: HighlightText;
+    background: Highlight;
+  }
+}

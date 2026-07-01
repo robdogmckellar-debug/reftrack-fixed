@@ -1,0 +1,25 @@
+export const IPC_CHANNELS = {
+  appBootstrap: 'app:bootstrap',
+  appGetInfo: 'app:get-info',
+  sitesUpsert: 'sites:upsert',
+  sitesDelete: 'sites:delete',
+  activityClear: 'activity:clear',
+  actionsCopyLink: 'actions:copy-link',
+  actionsRecordSuccess: 'actions:record-success',
+  actionsUndoSuccess: 'actions:undo-success',
+  settingsSetImageCleanerEnabled: 'settings:set-image-cleaner-enabled',
+  settingsSelectImageCleanerFolder: 'settings:select-image-cleaner-folder',
+  imageCleanerCompleted: 'image-cleaner:completed',
+  tasksUpsertCategory: 'tasks:upsert-category',
+  tasksDeleteCategory: 'tasks:delete-category',
+  tasksSetCompletion: 'tasks:set-completion',
+  tasksSetCompletions: 'tasks:set-completions',
+  externalOpen: 'external:open',
+  notificationsShowAction: 'notifications:show-action',
+  importerStart: 'importer:start',
+  importerCancel: 'importer:cancel',
+  importerProgress: 'importer:progress',
+  importerCompleted: 'importer:completed',
+} as const;
+
+export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

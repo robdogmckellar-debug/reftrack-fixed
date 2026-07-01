@@ -1,5 +1,3 @@
-import { parentPort } from 'electron';
-
 import { ApplicationError } from '../services/application-error';
 import { runStaticImport } from './static-import';
 import {
@@ -9,14 +7,15 @@ import {
   WorkerStartMessageSchema,
 } from './worker-protocol';
 
-if (!parentPort) {
+const importerPort = process.parentPort;
+if (!importerPort) {
   throw new Error('RefTrack importer worker requires an Electron utility-process parent port.');
 }
 
 let started = false;
 const abortController = new AbortController();
 
-parentPort.on('message', (event) => {
+importerPort.on('message', (event) => {
   if (started) return;
   const parsed = WorkerStartMessageSchema.safeParse(event.data);
   if (!parsed.success) return;
@@ -29,16 +28,16 @@ async function execute(jobId: string, url: string): Promise<void> {
     const result = await runStaticImport(url, {
       signal: abortController.signal,
       reportProgress: (progress) => {
-        parentPort.postMessage(
+        importerPort.postMessage(
           progressWorkerMessage(jobId, progress.stage, progress.message, progress.percent),
         );
       },
     });
-    parentPort.postMessage(resultWorkerMessage(jobId, result));
+    importerPort.postMessage(resultWorkerMessage(jobId, result));
     process.exitCode = 0;
   } catch (error: unknown) {
     const applicationError = normaliseError(error);
-    parentPort.postMessage(
+    importerPort.postMessage(
       errorWorkerMessage(jobId, {
         code: applicationError.code,
         message: applicationError.message,

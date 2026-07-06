@@ -155,7 +155,9 @@ export function TextFileImportDialog({
         return;
       }
       if (!isCredentialFreeHttpsUrl(site.url)) {
-        setError(`Enter a complete credential-free HTTPS URL for ${site.name || 'the selected site'}.`);
+        setError(
+          `Enter a complete credential-free HTTPS URL for ${site.name || 'the selected site'}.`,
+        );
         return;
       }
     }

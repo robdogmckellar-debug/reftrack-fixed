@@ -8,14 +8,18 @@ function read(relativePath) {
 }
 
 describe('site editor save footer layout', () => {
-  it('keeps the form actions visible while the editor body scrolls', () => {
-    const siteList = read('src/renderer/screens/site-editor/components/SiteList.tsx');
+  it('loads the layout override after the base Site Editor stylesheet', () => {
+    const rendererEntry = read('src/renderer/main.tsx');
     const layout = read('src/renderer/styles/site-editor-layout.css');
+    const siteForm = read('src/renderer/screens/site-editor/components/SiteForm.tsx');
 
-    expect(siteList).toContain("import '../../../styles/site-editor-layout.css';");
-    expect(layout).toContain('grid-template-rows: auto minmax(0, 1fr) auto;');
+    expect(rendererEntry.indexOf("import './styles/site-editor.css';")).toBeLessThan(
+      rendererEntry.indexOf("import './styles/site-editor-layout.css';"),
+    );
+    expect(layout).toContain('grid-template-rows: auto minmax(0, 1fr) auto !important;');
     expect(layout).toContain(':has(> .site-editor-command-error)');
-    expect(layout).toContain('grid-template-rows: auto auto minmax(0, 1fr) auto;');
-    expect(layout).toContain('grid-template-rows: minmax(0, 1fr);');
+    expect(layout).toContain('grid-template-rows: auto auto minmax(0, 1fr) auto !important;');
+    expect(layout).toContain('min-height: 66px;');
+    expect(siteForm).toContain("{creating ? 'Add site' : 'Save changes'}");
   });
 });

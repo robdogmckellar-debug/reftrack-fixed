@@ -4,6 +4,7 @@ import { useState } from 'preact/hooks';
 import type { RendererSite } from '../../../../shared/view-model/renderer-snapshot';
 import { EditIcon } from '../../../components/icons';
 import { Button } from '../../../design-system/Button';
+import '../../../styles/text-file-import.css';
 import { TextFileImportDialog } from './TextFileImportDialog';
 
 interface SiteListProps {

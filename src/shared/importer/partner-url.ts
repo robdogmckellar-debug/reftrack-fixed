@@ -53,11 +53,7 @@ export function isLikelyReferralUrl(url: URL): boolean {
   if (NON_CODE_FILE.test(finalSegment)) return false;
   if (KNOWN_CODE_PREFIX.test(finalSegment)) return true;
 
-  return (
-    OPAQUE_CODE.test(finalSegment) &&
-    /[a-z]/i.test(finalSegment) &&
-    /\d/.test(finalSegment)
-  );
+  return OPAQUE_CODE.test(finalSegment) && /[a-z]/i.test(finalSegment) && /\d/.test(finalSegment);
 }
 
 export function partnerUrlDeduplicationKey(value: string): string | null {

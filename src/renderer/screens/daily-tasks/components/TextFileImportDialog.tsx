@@ -123,6 +123,10 @@ export function TextFileImportDialog({
     setError(null);
   };
 
+  const setAllSelected = (selected: boolean): void => {
+    setSites((current) => current.map((site) => ({ ...site, selected })));
+  };
+
   const saveImport = async (): Promise<void> => {
     if (saving) return;
     const cleanCategoryName = categoryName.trim();
@@ -257,26 +261,10 @@ export function TextFileImportDialog({
               </span>
             </div>
             <div class="text-file-import__selection-actions">
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() =>
-                  setSites((current) =>
-                    current.map((site) => ({ ...site, selected: true })),
-                  )
-                }
-              >
+              <button type="button" disabled={saving} onClick={() => setAllSelected(true)}>
                 Select all
               </button>
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() =>
-                  setSites((current) =>
-                    current.map((site) => ({ ...site, selected: false })),
-                  )
-                }
-              >
+              <button type="button" disabled={saving} onClick={() => setAllSelected(false)}>
                 Select none
               </button>
             </div>

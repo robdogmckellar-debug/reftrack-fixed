@@ -30,7 +30,9 @@ export function parsePartnerText(fileName: string, source: string): ParsedPartne
 
   if (looksLikeHtml(text)) {
     const document = new DOMParser().parseFromString(text, 'text/html');
-    const baseUrl = safeBaseUrl(document.querySelector('base[href]')?.getAttribute('href'));
+    const baseUrl = safeBaseUrl(
+      document.querySelector('base[href]')?.getAttribute('href') ?? null,
+    );
     let ignoredRelativeLinks = 0;
 
     for (const anchor of Array.from(document.querySelectorAll('a[href]'))) {

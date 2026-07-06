@@ -1,6 +1,6 @@
 const REFERRAL_QUERY_KEY =
   /^(?:ref|refer|referral|refcode|referralcode|referrer|affiliate|affiliateid|aff|affid|promo|promocode|code|invite|invitecode|partner|partnerid|campaign|campaignid|clickid|subid|tracking|track|tag)$/i;
-const KNOWN_CODE_PREFIX = /^(?:rf|ref|aff|promo|invite|code)[-_]?[a-z0-9]{3,64}$/i;
+const CODE_PREFIX = /^(rf|ref|aff|promo|invite|code)([-_]?)([a-z0-9]{3,64})$/i;
 const OPAQUE_CODE = /^[a-z0-9][a-z0-9_-]{5,63}$/i;
 const NON_CODE_FILE =
   /\.(?:html?|php|aspx?|jsp|json|xml|css|m?js|cjs|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|pdf)$/i;
@@ -37,16 +37,16 @@ export function normalisePartnerHostname(hostname: string): string {
 export function isLikelyReferralUrl(url: URL): boolean {
   for (const [key, value] of url.searchParams) {
     if (value && isReferralQueryKey(key)) return true;
-    if (value && KNOWN_CODE_PREFIX.test(value)) return true;
+    if (value && hasKnownCodePrefix(value)) return true;
   }
 
   const hash = url.hash.replace(/^#/, '');
   if (hash) {
-    if (KNOWN_CODE_PREFIX.test(hash)) return true;
+    if (hasKnownCodePrefix(hash)) return true;
     const hashParams = new URLSearchParams(hash);
     for (const [key, value] of hashParams) {
       if (value && isReferralQueryKey(key)) return true;
-      if (value && KNOWN_CODE_PREFIX.test(value)) return true;
+      if (value && hasKnownCodePrefix(value)) return true;
     }
   }
 
@@ -57,7 +57,7 @@ export function isLikelyReferralUrl(url: URL): boolean {
   const finalSegment = segments.at(-1) ?? '';
   if (!finalSegment || COMMON_SEGMENTS.has(finalSegment.toLowerCase())) return false;
   if (NON_CODE_FILE.test(finalSegment)) return false;
-  if (KNOWN_CODE_PREFIX.test(finalSegment)) return true;
+  if (hasKnownCodePrefix(finalSegment)) return true;
 
   return OPAQUE_CODE.test(finalSegment) && /[a-z]/i.test(finalSegment) && /\d/.test(finalSegment);
 }
@@ -88,6 +88,14 @@ export function partnerUrlDeduplicationKey(value: string): string | null {
   canonical.searchParams.sort();
   if (canonical.pathname.length > 1) canonical.pathname = canonical.pathname.replace(/\/$/, '');
   return `referral:${canonical.origin}${canonical.pathname}${canonical.search}${canonical.hash}`;
+}
+
+function hasKnownCodePrefix(value: string): boolean {
+  const match = CODE_PREFIX.exec(value);
+  if (!match) return false;
+  const separator = match[2] ?? '';
+  const codeBody = match[3] ?? '';
+  return separator.length > 0 || /\d/.test(codeBody);
 }
 
 function isReferralQueryKey(value: string): boolean {

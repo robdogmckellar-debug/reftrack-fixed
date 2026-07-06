@@ -4,6 +4,7 @@ import { validateImporterUrl } from '../../src/main/importer/network-policy';
 import { extractPartnerData } from '../../src/main/importer/static-extractor';
 import { toImporterResult } from '../../src/main/importer/types';
 import {
+  isBlockedPartnerUrl,
   isLikelyReferralUrl,
   partnerUrlDeduplicationKey,
 } from '../../src/shared/importer/partner-url';
@@ -33,6 +34,11 @@ describe('partner URL recognition', () => {
 
     expect(isLikelyReferralUrl(new URL('https://echo.win/about'))).toBe(false);
     expect(isLikelyReferralUrl(new URL('https://echo.win/assets/app.js'))).toBe(false);
+  });
+
+  it('allows registration routes when they contain a referral code', () => {
+    expect(isBlockedPartnerUrl(new URL('https://alpha.vip/register'))).toBe(true);
+    expect(isBlockedPartnerUrl(new URL('https://alpha.vip/register?ref=ABC123'))).toBe(false);
   });
 
   it('keeps different referral codes on one host while collapsing ordinary pages', () => {
@@ -78,7 +84,7 @@ describe('partner URL recognition', () => {
           <head><title>Partner Group</title></head>
           <body>
             <a href="https://alpha.icu/RFAA15612">Alpha</a>
-            <a href="https://bravo.vip/RF3112A5161">Bravo</a>
+            <a href="https://bravo.vip/register?ref=RF3112A5161">Bravo</a>
             <a href="https://shared.bet/RFALPHA123">Shared Alpha</a>
             <a href="https://shared.bet/RFBRAVO456">Shared Bravo</a>
             <a href="/RFLOCAL789">Local redirect</a>
@@ -92,7 +98,7 @@ describe('partner URL recognition', () => {
     expect(result.sites.map((site) => site.url)).toEqual(
       expect.arrayContaining([
         'https://alpha.icu/RFAA15612',
-        'https://bravo.vip/RF3112A5161',
+        'https://bravo.vip/register?ref=RF3112A5161',
         'https://shared.bet/RFALPHA123',
         'https://shared.bet/RFBRAVO456',
         'https://group.win/RFLOCAL789',

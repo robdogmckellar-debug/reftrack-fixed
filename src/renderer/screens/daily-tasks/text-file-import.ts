@@ -1,4 +1,10 @@
 import type { ImportPartnerSite } from '../../../shared/ipc/contract';
+import {
+  isBlockedPartnerUrl,
+  isLikelyReferralUrl,
+  normalisePartnerHostname,
+  partnerUrlDeduplicationKey,
+} from '../../../shared/importer/partner-url';
 
 export const MAX_PARTNER_TEXT_FILE_BYTES = 2 * 1024 * 1024;
 
@@ -9,8 +15,6 @@ export interface ParsedPartnerTextFile {
   warnings: string[];
 }
 
-const URL_BLOCKLIST =
-  /(?:privacy|terms|login|log-in|register|sign-in|sign-up|contact|about|blog|news|faq|help|support|cookie|policy|sitemap|facebook|twitter|instagram|linkedin|youtube|tiktok|discord)/i;
 const MAX_RESULTS = 500;
 
 export async function parsePartnerTextFile(file: File): Promise<ParsedPartnerTextFile> {
@@ -46,6 +50,8 @@ export function parsePartnerText(fileName: string, source: string): ParsedPartne
       addCandidate(candidates, name, href, baseUrl ?? undefined);
     }
 
+    collectEmbeddedReferralUrls(text, candidates);
+
     if (ignoredRelativeLinks > 0) {
       warnings.push(
         `${ignoredRelativeLinks} relative link${ignoredRelativeLinks === 1 ? ' was' : 's were'} ignored because the text file did not provide a secure base URL.`,
@@ -64,9 +70,9 @@ export function parsePartnerText(fileName: string, source: string): ParsedPartne
     }
   }
 
-  const sites = deduplicateByHostname(candidates).slice(0, MAX_RESULTS);
+  const sites = deduplicateCandidates(candidates).slice(0, MAX_RESULTS);
   if (candidates.length > MAX_RESULTS) {
-    warnings.push(`Only the first ${MAX_RESULTS} distinct partner hosts were retained.`);
+    warnings.push(`Only the first ${MAX_RESULTS} distinct partner links were retained.`);
   }
   if (sites.length === 0) {
     throw new Error('No credential-free HTTPS partner links were found in the text file.');
@@ -94,6 +100,20 @@ function safeBaseUrl(value: string | null): URL | null {
   }
 }
 
+function collectEmbeddedReferralUrls(text: string, candidates: ImportPartnerSite[]): void {
+  for (const match of text.matchAll(/https:(?:\/\/|\\\/\\\/)[^\s"'<>]+/gi)) {
+    const href = trimEmbeddedUrl(match[0]);
+    let url: URL;
+    try {
+      url = new URL(href);
+    } catch {
+      continue;
+    }
+    if (!isLikelyReferralUrl(url)) continue;
+    addCandidate(candidates, nameFromHostname(url.hostname), href);
+  }
+}
+
 function addCandidate(
   candidates: ImportPartnerSite[],
   suppliedName: string,
@@ -107,21 +127,21 @@ function addCandidate(
     return;
   }
 
-  if (url.protocol !== 'https:' || url.username || url.password || URL_BLOCKLIST.test(url.href)) {
+  if (url.protocol !== 'https:' || url.username || url.password || isBlockedPartnerUrl(url)) {
     return;
   }
 
-  url.hash = '';
+  if (!isLikelyReferralUrl(url)) url.hash = '';
   const name = cleanName(suppliedName) || nameFromHostname(url.hostname);
   if (!name || name.length > 100 || url.href.length > 2048) return;
   candidates.push({ name, url: url.href });
 }
 
-function deduplicateByHostname(candidates: readonly ImportPartnerSite[]): ImportPartnerSite[] {
+function deduplicateCandidates(candidates: readonly ImportPartnerSite[]): ImportPartnerSite[] {
   const unique = new Map<string, ImportPartnerSite>();
   for (const candidate of candidates) {
-    const hostname = normaliseHostname(new URL(candidate.url).hostname);
-    if (!unique.has(hostname)) unique.set(hostname, candidate);
+    const key = partnerUrlDeduplicationKey(candidate.url);
+    if (key && !unique.has(key)) unique.set(key, candidate);
   }
   return [...unique.values()].sort((left, right) => left.name.localeCompare(right.name));
 }
@@ -138,6 +158,10 @@ function trimUrlPunctuation(value: string): string {
   return value.replace(/[),.;\]}]+$/g, '');
 }
 
+function trimEmbeddedUrl(value: string): string {
+  return trimUrlPunctuation(value.replace(/\\\//g, '/').replace(/&amp;/gi, '&'));
+}
+
 function cleanName(value: string): string {
   return value.replace(/\s+/g, ' ').trim().slice(0, 100);
 }
@@ -148,16 +172,9 @@ function categoryNameFromFile(fileName: string): string {
 }
 
 function nameFromHostname(hostname: string): string {
-  const label = normaliseHostname(hostname).split('.')[0] ?? '';
+  const label = normalisePartnerHostname(hostname).split('.')[0] ?? '';
   return label
     .replace(/[-_]+/g, ' ')
     .replace(/\b\w/g, (character) => character.toUpperCase())
     .trim();
-}
-
-function normaliseHostname(hostname: string): string {
-  return hostname
-    .toLowerCase()
-    .replace(/^www\./, '')
-    .replace(/\.$/, '');
 }

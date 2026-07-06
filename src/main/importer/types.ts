@@ -3,6 +3,7 @@ import type {
   ImporterProgressEvent,
   ImporterResult,
 } from '../../shared/ipc/contract';
+import { partnerUrlDeduplicationKey } from '../../shared/importer/partner-url';
 
 export interface StaticImportResult {
   brandName: string;
@@ -57,15 +58,10 @@ function mergeSites(
   primary: ImportPartnerSite[],
   secondary: ImportPartnerSite[],
 ): ImportPartnerSite[] {
-  const byHost = new Map<string, ImportPartnerSite>();
+  const byKey = new Map<string, ImportPartnerSite>();
   for (const site of [...primary, ...secondary]) {
-    let host: string;
-    try {
-      host = new URL(site.url).hostname.toLowerCase().replace(/^www\./, '');
-    } catch {
-      continue;
-    }
-    if (!byHost.has(host)) byHost.set(host, site);
+    const key = partnerUrlDeduplicationKey(site.url);
+    if (key && !byKey.has(key)) byKey.set(key, site);
   }
-  return [...byHost.values()].slice(0, 500);
+  return [...byKey.values()].slice(0, 500);
 }

@@ -1,6 +1,12 @@
 import { parse, type DefaultTreeAdapterTypes } from 'parse5';
 
 import type { ImportPartnerSite } from '../../shared/ipc/contract';
+import {
+  isBlockedPartnerUrl,
+  isLikelyReferralUrl,
+  normalisePartnerHostname,
+  partnerUrlDeduplicationKey,
+} from '../../shared/importer/partner-url';
 
 interface ExtractedPartnerData {
   brandName: string;
@@ -12,19 +18,16 @@ interface ExtractedPartnerData {
 type Node = DefaultTreeAdapterTypes.Node;
 type Element = DefaultTreeAdapterTypes.Element;
 
-const URL_BLOCKLIST =
-  /(?:privacy|terms|login|log-in|register|sign-in|sign-up|contact|about|blog|news|faq|help|support|cookie|policy|sitemap|facebook|twitter|instagram|linkedin|youtube|tiktok|discord)/i;
 const NAME_BLOCKLIST =
   /^(?:privacy|terms|login|register|sign in|sign up|contact|about|blog|news|faq|help|support|cookie|policy|sitemap|home|back|menu|navigation|search|facebook|twitter|instagram|linkedin|youtube)$/i;
 const PARTNER_SIGNAL = /(?:partner|casino|brand|operator|site|affiliate|network|portfolio|frame)/i;
-const REFERRAL_SIGNAL = /(?:ref|refer|referral|affiliate|aff|promo|code|rf[a-z0-9])/i;
 const MAX_RESULTS = 500;
 
 export function extractPartnerData(html: string, pageUrl: string): ExtractedPartnerData {
   const document = parse(html);
   const elements = collectElements(document);
   const page = new URL(pageUrl);
-  const pageHostname = normaliseHostname(page.hostname);
+  const pageHostname = normalisePartnerHostname(page.hostname);
   const warnings: string[] = [];
 
   const title = textOf(firstByTag(elements, 'title'));
@@ -65,9 +68,11 @@ export function extractPartnerData(html: string, pageUrl: string): ExtractedPart
     addCandidate(candidates, page, pageHostname, visibleName || imageAlt, href, className);
   }
 
+  collectEmbeddedReferralUrls(html, page, pageHostname, candidates);
+
   const sites = deduplicateCandidates(candidates).slice(0, MAX_RESULTS);
   if (candidates.length > MAX_RESULTS) {
-    warnings.push(`Only the first ${MAX_RESULTS} distinct partner hosts were retained.`);
+    warnings.push(`Only the first ${MAX_RESULTS} distinct partner links were retained.`);
   }
 
   const scriptCount = elements.filter((element) => element.tagName === 'script').length;
@@ -76,13 +81,13 @@ export function extractPartnerData(html: string, pageUrl: string): ExtractedPart
   if (brandName) confidence += 0.15;
   confidence += Math.min(0.65, sites.length * 0.13);
   if (partnerSignals > 0) confidence += 0.12;
-  if (sites.some((site) => REFERRAL_SIGNAL.test(site.url))) confidence += 0.08;
+  if (sites.some((site) => isLikelyReferralUrl(new URL(site.url)))) confidence += 0.08;
   confidence = roundConfidence(Math.min(1, confidence));
 
   if (sites.length === 0 && scriptCount > 3) {
     warnings.push('The static page contained scripts but no usable partner links.');
   } else if (sites.length === 1 && anchorCount > 10) {
-    warnings.push('Only one external partner link was identified with confidence.');
+    warnings.push('Only one partner link was identified with confidence.');
   }
 
   return { brandName, sites, confidence, warnings };
@@ -100,7 +105,7 @@ function collectStructuredData(jsonText: string, page: URL, candidates: Candidat
       addCandidate(
         candidates,
         page,
-        normaliseHostname(page.hostname),
+        normalisePartnerHostname(page.hostname),
         name,
         url,
         'structured-data',
@@ -108,6 +113,33 @@ function collectStructuredData(jsonText: string, page: URL, candidates: Candidat
     });
   } catch {
     // Invalid third-party structured data is ignored.
+  }
+}
+
+function collectEmbeddedReferralUrls(
+  html: string,
+  page: URL,
+  pageHostname: string,
+  candidates: Candidate[],
+): void {
+  const matches = html.matchAll(/https:(?:\/\/|\\\/\\\/)[^\s"'<>]+/gi);
+  for (const match of matches) {
+    const href = trimEmbeddedUrl(match[0]);
+    let url: URL;
+    try {
+      url = new URL(href);
+    } catch {
+      continue;
+    }
+    if (!isLikelyReferralUrl(url)) continue;
+    addCandidate(
+      candidates,
+      page,
+      pageHostname,
+      nameFromHostname(url.hostname),
+      href,
+      'embedded-referral-url',
+    );
   }
 }
 
@@ -146,19 +178,20 @@ function addCandidate(
   }
 
   if (url.protocol !== 'https:' || url.username || url.password) return;
-  url.hash = '';
-  const hostname = normaliseHostname(url.hostname);
-  if (!hostname || hostname === pageHostname || URL_BLOCKLIST.test(url.href)) {
-    return;
-  }
+  const referralLike = isLikelyReferralUrl(url);
+  const hostname = normalisePartnerHostname(url.hostname);
+  if (!hostname || isBlockedPartnerUrl(url)) return;
+  if (sameDocument(url, page)) return;
+  if (hostname === pageHostname && !referralLike) return;
+  if (!referralLike) url.hash = '';
 
   let name = cleanSiteName(suppliedName);
   if (!name || NAME_BLOCKLIST.test(name)) name = nameFromHostname(hostname);
   if (!name || name.length < 2 || name.length > 100) return;
 
   let score = 10;
-  score += Math.min(30, url.pathname.length + url.search.length);
-  if (REFERRAL_SIGNAL.test(`${url.pathname}${url.search}`)) score += 35;
+  score += Math.min(30, url.pathname.length + url.search.length + url.hash.length);
+  if (referralLike) score += 45;
   if (PARTNER_SIGNAL.test(context)) score += 15;
   if (suppliedName) score += 10;
 
@@ -166,15 +199,31 @@ function addCandidate(
 }
 
 function deduplicateCandidates(candidates: Candidate[]): ImportPartnerSite[] {
-  const byHostname = new Map<string, Candidate>();
+  const byKey = new Map<string, Candidate>();
   for (const candidate of candidates) {
-    const hostname = normaliseHostname(new URL(candidate.url).hostname);
-    const existing = byHostname.get(hostname);
-    if (!existing || candidate.score > existing.score) byHostname.set(hostname, candidate);
+    const key = partnerUrlDeduplicationKey(candidate.url);
+    if (!key) continue;
+    const existing = byKey.get(key);
+    if (!existing || candidate.score > existing.score) byKey.set(key, candidate);
   }
-  return [...byHostname.values()]
+  return [...byKey.values()]
     .sort((left, right) => right.score - left.score || left.name.localeCompare(right.name))
     .map(({ name, url }) => ({ name, url }));
+}
+
+function sameDocument(candidate: URL, page: URL): boolean {
+  const left = new URL(candidate.href);
+  const right = new URL(page.href);
+  left.hash = '';
+  right.hash = '';
+  return left.href === right.href;
+}
+
+function trimEmbeddedUrl(value: string): string {
+  return value
+    .replace(/\\\//g, '/')
+    .replace(/&amp;/gi, '&')
+    .replace(/[),.;\]}]+$/g, '');
 }
 
 function collectElements(root: Node): Element[] {
@@ -240,18 +289,11 @@ function cleanWhitespace(value: string): string {
 }
 
 function nameFromHostname(hostname: string): string {
-  const firstLabel = normaliseHostname(hostname).split('.')[0] ?? '';
+  const firstLabel = normalisePartnerHostname(hostname).split('.')[0] ?? '';
   return firstLabel
     .replace(/[-_]+/g, ' ')
     .replace(/\b\w/g, (character) => character.toUpperCase())
     .trim();
-}
-
-function normaliseHostname(hostname: string): string {
-  return hostname
-    .toLowerCase()
-    .replace(/^www\./, '')
-    .replace(/\.$/, '');
 }
 
 function roundConfidence(value: number): number {

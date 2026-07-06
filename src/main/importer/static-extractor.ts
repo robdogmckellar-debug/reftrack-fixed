@@ -2,6 +2,7 @@ import { parse, type DefaultTreeAdapterTypes } from 'parse5';
 
 import type { ImportPartnerSite } from '../../shared/ipc/contract';
 import {
+  isBlockedPartnerUrl,
   isLikelyReferralUrl,
   normalisePartnerHostname,
   partnerUrlDeduplicationKey,
@@ -17,8 +18,6 @@ interface ExtractedPartnerData {
 type Node = DefaultTreeAdapterTypes.Node;
 type Element = DefaultTreeAdapterTypes.Element;
 
-const URL_BLOCKLIST =
-  /(?:privacy|terms|login|log-in|register|sign-in|sign-up|contact|about|blog|news|faq|help|support|cookie|policy|sitemap|facebook|twitter|instagram|linkedin|youtube|tiktok|discord)/i;
 const NAME_BLOCKLIST =
   /^(?:privacy|terms|login|register|sign in|sign up|contact|about|blog|news|faq|help|support|cookie|policy|sitemap|home|back|menu|navigation|search|facebook|twitter|instagram|linkedin|youtube)$/i;
 const PARTNER_SIGNAL = /(?:partner|casino|brand|operator|site|affiliate|network|portfolio|frame)/i;
@@ -88,7 +87,7 @@ export function extractPartnerData(html: string, pageUrl: string): ExtractedPart
   if (sites.length === 0 && scriptCount > 3) {
     warnings.push('The static page contained scripts but no usable partner links.');
   } else if (sites.length === 1 && anchorCount > 10) {
-    warnings.push('Only one external partner link was identified with confidence.');
+    warnings.push('Only one partner link was identified with confidence.');
   }
 
   return { brandName, sites, confidence, warnings };
@@ -181,7 +180,7 @@ function addCandidate(
   if (url.protocol !== 'https:' || url.username || url.password) return;
   const referralLike = isLikelyReferralUrl(url);
   const hostname = normalisePartnerHostname(url.hostname);
-  if (!hostname || URL_BLOCKLIST.test(url.href)) return;
+  if (!hostname || isBlockedPartnerUrl(url)) return;
   if (sameDocument(url, page)) return;
   if (hostname === pageHostname && !referralLike) return;
   if (!referralLike) url.hash = '';

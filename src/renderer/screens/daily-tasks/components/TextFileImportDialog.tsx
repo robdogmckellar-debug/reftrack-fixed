@@ -177,7 +177,10 @@ export function TextFileImportDialog({
       reset();
       onClose();
     } catch (caught) {
-      const message = errorMessage(caught, 'RefTrack could not save the imported Daily Tasks category.');
+      const message = errorMessage(
+        caught,
+        'RefTrack could not save the imported Daily Tasks category.',
+      );
       setError(message);
       onFeedback('danger', 'Text-file import could not be saved', message);
     } finally {
@@ -257,14 +260,22 @@ export function TextFileImportDialog({
               <button
                 type="button"
                 disabled={saving}
-                onClick={() => setSites((current) => current.map((site) => ({ ...site, selected: true })))}
+                onClick={() =>
+                  setSites((current) =>
+                    current.map((site) => ({ ...site, selected: true })),
+                  )
+                }
               >
                 Select all
               </button>
               <button
                 type="button"
                 disabled={saving}
-                onClick={() => setSites((current) => current.map((site) => ({ ...site, selected: false })))}
+                onClick={() =>
+                  setSites((current) =>
+                    current.map((site) => ({ ...site, selected: false })),
+                  )
+                }
               >
                 Select none
               </button>

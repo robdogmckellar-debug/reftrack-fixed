@@ -57,6 +57,7 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
   const [textImportOpen, setTextImportOpen] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const feedbackTimer = useRef<number | null>(null);
+  const initialExpansionApplied = useRef(false);
 
   const sortedCategories = useMemo(
     () => sortTaskCategories(categories, dailyState, today, autoSort),
@@ -122,14 +123,15 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
   }, [active, showFeedback]);
 
   useEffect(() => {
-    if (expandedCategoryIds.size > 0 || sortedCategories.length === 0) return;
+    if (initialExpansionApplied.current || sortedCategories.length === 0) return;
+    initialExpansionApplied.current = true;
     const preferred =
       sortedCategories.find(
         (category) =>
           categoryStatus(categoryProgress(category, dailyState, today)) === 'in-progress',
       ) ?? sortedCategories[0];
     if (preferred) setExpandedCategoryIds(new Set([preferred.id]));
-  }, [dailyState, expandedCategoryIds.size, sortedCategories, today]);
+  }, [dailyState, sortedCategories, today]);
 
   const setSitePending = (siteId: string, pending: boolean): void => {
     setPendingSiteIds((current) => {

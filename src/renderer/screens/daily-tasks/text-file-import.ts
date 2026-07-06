@@ -84,7 +84,7 @@ function looksLikeHtml(value: string): boolean {
   return /<(?:!doctype\s+html|html|head|body|a)\b/i.test(value);
 }
 
-function safeBaseUrl(value: string | null): URL | null {
+function safeBaseUrl(value: string | null | undefined): URL | null {
   if (!value) return null;
   try {
     const url = new URL(value);

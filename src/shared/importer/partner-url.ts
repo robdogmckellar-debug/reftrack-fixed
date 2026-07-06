@@ -4,6 +4,12 @@ const KNOWN_CODE_PREFIX = /^(?:rf|ref|aff|promo|invite|code)[-_]?[a-z0-9]{3,64}$
 const OPAQUE_CODE = /^[a-z0-9][a-z0-9_-]{5,63}$/i;
 const NON_CODE_FILE =
   /\.(?:html?|php|aspx?|jsp|json|xml|css|m?js|cjs|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|pdf)$/i;
+const BLOCKED_HOST =
+  /(?:^|\.)(?:facebook\.com|twitter\.com|x\.com|instagram\.com|linkedin\.com|youtube\.com|youtu\.be|tiktok\.com|discord\.com|discord\.gg)$/i;
+const NON_PARTNER_ROUTE =
+  /(?:^|[/?&_.-])(?:privacy|terms|contact|about|blog|news|faq|help|support|cookie|policy|sitemap)(?:[/?&=_.-]|$)/i;
+const AUTH_ROUTE =
+  /(?:^|[/?&_.-])(?:login|log-in|register|sign-in|sign-up)(?:[/?&=_.-]|$)/i;
 const COMMON_SEGMENTS = new Set([
   'about',
   'account',
@@ -54,6 +60,15 @@ export function isLikelyReferralUrl(url: URL): boolean {
   if (KNOWN_CODE_PREFIX.test(finalSegment)) return true;
 
   return OPAQUE_CODE.test(finalSegment) && /[a-z]/i.test(finalSegment) && /\d/.test(finalSegment);
+}
+
+export function isBlockedPartnerUrl(url: URL): boolean {
+  const hostname = normalisePartnerHostname(url.hostname);
+  if (BLOCKED_HOST.test(hostname)) return true;
+
+  const route = `${url.pathname}${url.search}${url.hash}`;
+  if (NON_PARTNER_ROUTE.test(route)) return true;
+  return AUTH_ROUTE.test(route) && !isLikelyReferralUrl(url);
 }
 
 export function partnerUrlDeduplicationKey(value: string): string | null {

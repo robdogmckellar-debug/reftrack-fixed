@@ -1,5 +1,6 @@
 import type { ImportPartnerSite } from '../../../shared/ipc/contract';
 import {
+  isBlockedPartnerUrl,
   isLikelyReferralUrl,
   normalisePartnerHostname,
   partnerUrlDeduplicationKey,
@@ -14,8 +15,6 @@ export interface ParsedPartnerTextFile {
   warnings: string[];
 }
 
-const URL_BLOCKLIST =
-  /(?:privacy|terms|login|log-in|register|sign-in|sign-up|contact|about|blog|news|faq|help|support|cookie|policy|sitemap|facebook|twitter|instagram|linkedin|youtube|tiktok|discord)/i;
 const MAX_RESULTS = 500;
 
 export async function parsePartnerTextFile(file: File): Promise<ParsedPartnerTextFile> {
@@ -112,7 +111,7 @@ function addCandidate(
     return;
   }
 
-  if (url.protocol !== 'https:' || url.username || url.password || URL_BLOCKLIST.test(url.href)) {
+  if (url.protocol !== 'https:' || url.username || url.password || isBlockedPartnerUrl(url)) {
     return;
   }
 

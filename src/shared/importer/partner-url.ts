@@ -1,5 +1,5 @@
 const REFERRAL_QUERY_KEY =
-  /^(?:ref(?:erral)?|refer(?:rer)?|affiliate|aff(?:iliate)?(?:id)?|promo(?:code)?|code|invite|partner|campaign|clickid|subid|tracking|track|tag)$/i;
+  /^(?:ref|refer|referral|refcode|referralcode|referrer|affiliate|affiliateid|aff|affid|promo|promocode|code|invite|invitecode|partner|partnerid|campaign|campaignid|clickid|subid|tracking|track|tag)$/i;
 const KNOWN_CODE_PREFIX = /^(?:rf|ref|aff|promo|invite|code)[-_]?[a-z0-9]{3,64}$/i;
 const OPAQUE_CODE = /^[a-z0-9][a-z0-9_-]{5,63}$/i;
 const NON_CODE_FILE =
@@ -36,7 +36,7 @@ export function normalisePartnerHostname(hostname: string): string {
 
 export function isLikelyReferralUrl(url: URL): boolean {
   for (const [key, value] of url.searchParams) {
-    if (value && REFERRAL_QUERY_KEY.test(key)) return true;
+    if (value && isReferralQueryKey(key)) return true;
     if (value && KNOWN_CODE_PREFIX.test(value)) return true;
   }
 
@@ -45,7 +45,7 @@ export function isLikelyReferralUrl(url: URL): boolean {
     if (KNOWN_CODE_PREFIX.test(hash)) return true;
     const hashParams = new URLSearchParams(hash);
     for (const [key, value] of hashParams) {
-      if (value && REFERRAL_QUERY_KEY.test(key)) return true;
+      if (value && isReferralQueryKey(key)) return true;
       if (value && KNOWN_CODE_PREFIX.test(value)) return true;
     }
   }
@@ -88,6 +88,10 @@ export function partnerUrlDeduplicationKey(value: string): string | null {
   canonical.searchParams.sort();
   if (canonical.pathname.length > 1) canonical.pathname = canonical.pathname.replace(/\/$/, '');
   return `referral:${canonical.origin}${canonical.pathname}${canonical.search}${canonical.hash}`;
+}
+
+function isReferralQueryKey(value: string): boolean {
+  return REFERRAL_QUERY_KEY.test(value.replace(/[-_.\s]/g, ''));
 }
 
 function decodeURIComponentSafely(value: string): string {

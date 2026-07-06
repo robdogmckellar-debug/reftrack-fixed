@@ -9,7 +9,7 @@ const BLOCKED_HOST =
 const NON_PARTNER_ROUTE =
   /(?:^|[/?&_.-])(?:privacy|terms|contact|about|blog|news|faq|help|support|cookie|policy|sitemap)(?:[/?&=_.-]|$)/i;
 const AUTH_ROUTE =
-  /(?:^|[/?&_.-])(?:login|log-in|register|sign-in|sign-up)(?:[/?&=_.-]|$)/i;
+  /(?:^|[/?&_.-])(?:login|log-in|register|sign-in|signin|sign-up|signup)(?:[/?&=_.-]|$)/i;
 const COMMON_SEGMENTS = new Set([
   'about',
   'account',

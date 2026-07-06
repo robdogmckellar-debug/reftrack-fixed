@@ -200,12 +200,32 @@ function addCandidate(
 
 function deduplicateCandidates(candidates: Candidate[]): ImportPartnerSite[] {
   const byKey = new Map<string, Candidate>();
+  const referralHosts = new Set<string>();
+
   for (const candidate of candidates) {
+    let url: URL;
+    try {
+      url = new URL(candidate.url);
+    } catch {
+      continue;
+    }
+
+    const hostname = normalisePartnerHostname(url.hostname);
+    const referralLike = isLikelyReferralUrl(url);
     const key = partnerUrlDeduplicationKey(candidate.url);
-    if (!key) continue;
+    if (!hostname || !key) continue;
+
+    if (referralLike) {
+      referralHosts.add(hostname);
+      byKey.delete(`host:${hostname}`);
+    } else if (referralHosts.has(hostname)) {
+      continue;
+    }
+
     const existing = byKey.get(key);
     if (!existing || candidate.score > existing.score) byKey.set(key, candidate);
   }
+
   return [...byKey.values()]
     .sort((left, right) => right.score - left.score || left.name.localeCompare(right.name))
     .map(({ name, url }) => ({ name, url }));

@@ -139,10 +139,31 @@ function addCandidate(
 
 function deduplicateCandidates(candidates: readonly ImportPartnerSite[]): ImportPartnerSite[] {
   const unique = new Map<string, ImportPartnerSite>();
+  const referralHosts = new Set<string>();
+
   for (const candidate of candidates) {
+    let url: URL;
+    try {
+      url = new URL(candidate.url);
+    } catch {
+      continue;
+    }
+
+    const hostname = normalisePartnerHostname(url.hostname);
+    const referralLike = isLikelyReferralUrl(url);
     const key = partnerUrlDeduplicationKey(candidate.url);
-    if (key && !unique.has(key)) unique.set(key, candidate);
+    if (!hostname || !key) continue;
+
+    if (referralLike) {
+      referralHosts.add(hostname);
+      unique.delete(`host:${hostname}`);
+    } else if (referralHosts.has(hostname)) {
+      continue;
+    }
+
+    if (!unique.has(key)) unique.set(key, candidate);
   }
+
   return [...unique.values()].sort((left, right) => left.name.localeCompare(right.name));
 }
 

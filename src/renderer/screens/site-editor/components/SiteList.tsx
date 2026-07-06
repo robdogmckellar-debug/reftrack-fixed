@@ -9,6 +9,7 @@ interface SiteListProps {
   selectedSiteId: string | null;
   creating: boolean;
   onCreate(): boolean;
+  onImportText(): void;
   onSelect(siteId: string): boolean;
 }
 
@@ -30,6 +31,7 @@ export function SiteList({
   selectedSiteId,
   creating,
   onCreate,
+  onImportText,
   onSelect,
 }: SiteListProps): JSX.Element {
   const handleKeyDown = (
@@ -70,14 +72,19 @@ export function SiteList({
             {sites.length} site{sites.length === 1 ? '' : 's'} configured
           </p>
         </div>
-        <Button
-          variant="primary"
-          size="small"
-          class="site-editor-add-button"
-          onClick={() => onCreate()}
-        >
-          Add site
-        </Button>
+        <div class="site-editor-list-panel__actions">
+          <Button variant="secondary" size="small" onClick={onImportText}>
+            Import .txt
+          </Button>
+          <Button
+            variant="primary"
+            size="small"
+            class="site-editor-add-button"
+            onClick={() => onCreate()}
+          >
+            Add site
+          </Button>
+        </div>
       </header>
 
       {creating ? (
@@ -127,10 +134,15 @@ export function SiteList({
         <div class="site-editor-list-empty">
           <EditIcon size={28} />
           <strong>No sites configured</strong>
-          <p>Add your first referral site to make it available on the Dashboard.</p>
-          <Button variant="primary" onClick={() => onCreate()}>
-            Add first site
-          </Button>
+          <p>Add your first referral site or import partner links from a text file.</p>
+          <div class="site-editor-list-empty__actions">
+            <Button variant="secondary" onClick={onImportText}>
+              Import .txt
+            </Button>
+            <Button variant="primary" onClick={() => onCreate()}>
+              Add first site
+            </Button>
+          </div>
         </div>
       )}
     </aside>

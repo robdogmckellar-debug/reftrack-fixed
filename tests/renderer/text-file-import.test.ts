@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { parsePartnerText } from '../../src/renderer/screens/site-editor/text-file-import';
+import { parsePartnerText } from '../../src/renderer/screens/daily-tasks/text-file-import';
 
-describe('partner text-file import', () => {
-  it('extracts named HTTPS links from common text formats', () => {
+describe('Daily Tasks partner text-file import', () => {
+  it('uses the text filename as the category name and extracts named HTTPS links', () => {
     const result = parsePartnerText(
-      'gold-group.txt',
+      'Gold-Group-Partnership.txt',
       [
         'ButtonBg, https://rr4winau.org/RFGOLD3GROUP',
         'Lucky Nine | https://pg9aus.org/RFGOLD1GROUP',
@@ -13,7 +13,7 @@ describe('partner text-file import', () => {
       ].join('\n'),
     );
 
-    expect(result.brandName).toBe('gold group');
+    expect(result.categoryName).toBe('Gold Group Partnership');
     expect(result.sites).toEqual(
       expect.arrayContaining([
         { name: 'ButtonBg', url: 'https://rr4winau.org/RFGOLD3GROUP' },

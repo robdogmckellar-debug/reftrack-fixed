@@ -50,6 +50,8 @@ export function parsePartnerText(fileName: string, source: string): ParsedPartne
       addCandidate(candidates, name, href, baseUrl ?? undefined);
     }
 
+    collectEmbeddedReferralUrls(text, candidates);
+
     if (ignoredRelativeLinks > 0) {
       warnings.push(
         `${ignoredRelativeLinks} relative link${ignoredRelativeLinks === 1 ? ' was' : 's were'} ignored because the text file did not provide a secure base URL.`,
@@ -98,6 +100,20 @@ function safeBaseUrl(value: string | null): URL | null {
   }
 }
 
+function collectEmbeddedReferralUrls(text: string, candidates: ImportPartnerSite[]): void {
+  for (const match of text.matchAll(/https:(?:\/\/|\\\/\\\/)[^\s"'<>]+/gi)) {
+    const href = trimEmbeddedUrl(match[0]);
+    let url: URL;
+    try {
+      url = new URL(href);
+    } catch {
+      continue;
+    }
+    if (!isLikelyReferralUrl(url)) continue;
+    addCandidate(candidates, nameFromHostname(url.hostname), href);
+  }
+}
+
 function addCandidate(
   candidates: ImportPartnerSite[],
   suppliedName: string,
@@ -140,6 +156,10 @@ function cleanDelimitedName(value: string): string {
 
 function trimUrlPunctuation(value: string): string {
   return value.replace(/[),.;\]}]+$/g, '');
+}
+
+function trimEmbeddedUrl(value: string): string {
+  return trimUrlPunctuation(value.replace(/\\\//g, '/').replace(/&amp;/gi, '&'));
 }
 
 function cleanName(value: string): string {

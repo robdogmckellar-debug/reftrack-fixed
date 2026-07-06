@@ -1,4 +1,9 @@
 import type { ImportPartnerSite } from '../../../shared/ipc/contract';
+import {
+  isLikelyReferralUrl,
+  normalisePartnerHostname,
+  partnerUrlDeduplicationKey,
+} from '../../../shared/importer/partner-url';
 
 export const MAX_PARTNER_TEXT_FILE_BYTES = 2 * 1024 * 1024;
 
@@ -64,9 +69,9 @@ export function parsePartnerText(fileName: string, source: string): ParsedPartne
     }
   }
 
-  const sites = deduplicateByHostname(candidates).slice(0, MAX_RESULTS);
+  const sites = deduplicateCandidates(candidates).slice(0, MAX_RESULTS);
   if (candidates.length > MAX_RESULTS) {
-    warnings.push(`Only the first ${MAX_RESULTS} distinct partner hosts were retained.`);
+    warnings.push(`Only the first ${MAX_RESULTS} distinct partner links were retained.`);
   }
   if (sites.length === 0) {
     throw new Error('No credential-free HTTPS partner links were found in the text file.');
@@ -111,17 +116,17 @@ function addCandidate(
     return;
   }
 
-  url.hash = '';
+  if (!isLikelyReferralUrl(url)) url.hash = '';
   const name = cleanName(suppliedName) || nameFromHostname(url.hostname);
   if (!name || name.length > 100 || url.href.length > 2048) return;
   candidates.push({ name, url: url.href });
 }
 
-function deduplicateByHostname(candidates: readonly ImportPartnerSite[]): ImportPartnerSite[] {
+function deduplicateCandidates(candidates: readonly ImportPartnerSite[]): ImportPartnerSite[] {
   const unique = new Map<string, ImportPartnerSite>();
   for (const candidate of candidates) {
-    const hostname = normaliseHostname(new URL(candidate.url).hostname);
-    if (!unique.has(hostname)) unique.set(hostname, candidate);
+    const key = partnerUrlDeduplicationKey(candidate.url);
+    if (key && !unique.has(key)) unique.set(key, candidate);
   }
   return [...unique.values()].sort((left, right) => left.name.localeCompare(right.name));
 }
@@ -148,16 +153,9 @@ function categoryNameFromFile(fileName: string): string {
 }
 
 function nameFromHostname(hostname: string): string {
-  const label = normaliseHostname(hostname).split('.')[0] ?? '';
+  const label = normalisePartnerHostname(hostname).split('.')[0] ?? '';
   return label
     .replace(/[-_]+/g, ' ')
     .replace(/\b\w/g, (character) => character.toUpperCase())
     .trim();
-}
-
-function normaliseHostname(hostname: string): string {
-  return hostname
-    .toLowerCase()
-    .replace(/^www\./, '')
-    .replace(/\.$/, '');
 }

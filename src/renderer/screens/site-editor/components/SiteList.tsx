@@ -1,12 +1,8 @@
 import type { JSX } from 'preact';
-import { useState } from 'preact/hooks';
 
 import type { RendererSite } from '../../../../shared/view-model/renderer-snapshot';
 import { EditIcon } from '../../../components/icons';
 import { Button } from '../../../design-system/Button';
-import '../../../styles/site-editor-layout.css';
-import '../../../styles/text-file-import.css';
-import { TextFileImportDialog } from './TextFileImportDialog';
 
 interface SiteListProps {
   sites: readonly RendererSite[];
@@ -36,9 +32,6 @@ export function SiteList({
   onCreate,
   onSelect,
 }: SiteListProps): JSX.Element {
-  const [importOpen, setImportOpen] = useState(false);
-  const [importedCount, setImportedCount] = useState(0);
-
   const handleKeyDown = (
     event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
     index: number,
@@ -68,102 +61,78 @@ export function SiteList({
   };
 
   return (
-    <>
-      <aside class="site-editor-list-panel" aria-label="Referral sites">
-        <header class="site-editor-list-panel__header">
-          <div>
-            <span class="site-editor-eyebrow">Site library</span>
-            <h1>Referral sites</h1>
-            <p>
-              {sites.length} site{sites.length === 1 ? '' : 's'} configured
-            </p>
-          </div>
-          <div class="site-editor-list-panel__actions">
-            <Button variant="secondary" size="small" onClick={() => setImportOpen(true)}>
-              Import .txt
-            </Button>
-            <Button
-              variant="primary"
-              size="small"
-              class="site-editor-add-button"
-              onClick={() => onCreate()}
-            >
-              Add site
-            </Button>
-          </div>
-        </header>
+    <aside class="site-editor-list-panel" aria-label="Referral sites">
+      <header class="site-editor-list-panel__header">
+        <div>
+          <span class="site-editor-eyebrow">Site library</span>
+          <h1>Referral sites</h1>
+          <p>
+            {sites.length} site{sites.length === 1 ? '' : 's'} configured
+          </p>
+        </div>
+        <Button
+          variant="primary"
+          size="small"
+          class="site-editor-add-button"
+          onClick={() => onCreate()}
+        >
+          Add site
+        </Button>
+      </header>
 
-        {importedCount > 0 ? (
-          <div class="site-editor-import-success" role="status">
-            Imported {importedCount} partner site{importedCount === 1 ? '' : 's'}.
-          </div>
-        ) : null}
+      {creating ? (
+        <div class="site-editor-new-indicator" role="status">
+          <span aria-hidden="true">+</span>
+          <span>Creating a new site</span>
+        </div>
+      ) : null}
 
-        {creating ? (
-          <div class="site-editor-new-indicator" role="status">
-            <span aria-hidden="true">+</span>
-            <span>Creating a new site</span>
-          </div>
-        ) : null}
-
-        {sites.length ? (
-          <div class="site-editor-site-list" role="listbox" aria-label="Configured sites">
-            {sites.map((site, index) => {
-              const selected = !creating && site.id === selectedSiteId;
-              return (
-                <button
-                  key={site.id}
-                  id={`site-editor-option-${site.id}`}
-                  class={`site-editor-site-option${selected ? ' is-selected' : ''}`}
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  tabIndex={selected || (selectedSiteId === null && index === 0) ? 0 : -1}
-                  onClick={() => onSelect(site.id)}
-                  onKeyDown={(event) => handleKeyDown(event, index)}
-                >
-                  <span class="site-editor-site-option__icon" aria-hidden="true">
-                    <EditIcon size={16} />
+      {sites.length ? (
+        <div class="site-editor-site-list" role="listbox" aria-label="Configured sites">
+          {sites.map((site, index) => {
+            const selected = !creating && site.id === selectedSiteId;
+            return (
+              <button
+                key={site.id}
+                id={`site-editor-option-${site.id}`}
+                class={`site-editor-site-option${selected ? ' is-selected' : ''}`}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                tabIndex={selected || (selectedSiteId === null && index === 0) ? 0 : -1}
+                onClick={() => onSelect(site.id)}
+                onKeyDown={(event) => handleKeyDown(event, index)}
+              >
+                <span class="site-editor-site-option__icon" aria-hidden="true">
+                  <EditIcon size={16} />
+                </span>
+                <span class="site-editor-site-option__copy">
+                  <span class="site-editor-site-option__name">{site.name}</span>
+                  <span class="site-editor-site-option__meta">
+                    {formatMoney(site.bonus)} bonus · {copyLimitLabel(site.maxCopiesPerDay)}
                   </span>
-                  <span class="site-editor-site-option__copy">
-                    <span class="site-editor-site-option__name">{site.name}</span>
-                    <span class="site-editor-site-option__meta">
-                      {formatMoney(site.bonus)} bonus · {copyLimitLabel(site.maxCopiesPerDay)}
-                    </span>
-                    <span class="site-editor-site-option__stats">
-                      {site.copies} total cop{site.copies === 1 ? 'y' : 'ies'} · {site.successes}{' '}
-                      success{site.successes === 1 ? '' : 'es'}
-                    </span>
+                  <span class="site-editor-site-option__stats">
+                    {site.copies} total cop{site.copies === 1 ? 'y' : 'ies'} · {site.successes}{' '}
+                    success{site.successes === 1 ? '' : 'es'}
                   </span>
-                  <span class={`site-editor-site-option__link-state${site.url ? '' : ' is-missing'}`}>
-                    {site.url ? 'Ready' : 'No URL'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div class="site-editor-list-empty">
-            <EditIcon size={28} />
-            <strong>No sites configured</strong>
-            <p>Add your first referral site or import partner links from a text file.</p>
-            <div class="site-editor-list-empty__actions">
-              <Button variant="secondary" onClick={() => setImportOpen(true)}>
-                Import .txt
-              </Button>
-              <Button variant="primary" onClick={() => onCreate()}>
-                Add first site
-              </Button>
-            </div>
-          </div>
-        )}
-      </aside>
-
-      <TextFileImportDialog
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        onImported={(count) => setImportedCount(count)}
-      />
-    </>
+                </span>
+                <span class={`site-editor-site-option__link-state${site.url ? '' : ' is-missing'}`}>
+                  {site.url ? 'Ready' : 'No URL'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div class="site-editor-list-empty">
+          <EditIcon size={28} />
+          <strong>No sites configured</strong>
+          <p>Add your first referral site to make it available on the Dashboard.</p>
+          <Button variant="primary" onClick={() => onCreate()}>
+            Add first site
+          </Button>
+        </div>
+      )}
+    </aside>
   );
 }

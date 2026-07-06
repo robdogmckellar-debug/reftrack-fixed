@@ -4,7 +4,7 @@ export const MAX_PARTNER_TEXT_FILE_BYTES = 2 * 1024 * 1024;
 
 export interface ParsedPartnerTextFile {
   fileName: string;
-  brandName: string;
+  categoryName: string;
   sites: ImportPartnerSite[];
   warnings: string[];
 }
@@ -14,12 +14,8 @@ const URL_BLOCKLIST =
 const MAX_RESULTS = 500;
 
 export async function parsePartnerTextFile(file: File): Promise<ParsedPartnerTextFile> {
-  if (!/\.txt$/i.test(file.name)) {
-    throw new Error('Choose a .txt file.');
-  }
-  if (file.size === 0) {
-    throw new Error('The selected text file is empty.');
-  }
+  if (!/\.txt$/i.test(file.name)) throw new Error('Choose a .txt file.');
+  if (file.size === 0) throw new Error('The selected text file is empty.');
   if (file.size > MAX_PARTNER_TEXT_FILE_BYTES) {
     throw new Error('The selected text file is larger than the 2 MiB safety limit.');
   }
@@ -31,19 +27,12 @@ export function parsePartnerText(fileName: string, source: string): ParsedPartne
   const text = source.replace(/^\uFEFF/, '');
   const warnings: string[] = [];
   const candidates: ImportPartnerSite[] = [];
-  let brandName = fileStem(fileName);
 
   if (looksLikeHtml(text)) {
     const document = new DOMParser().parseFromString(text, 'text/html');
-    brandName = cleanName(
-      document.querySelector('h1')?.textContent ??
-        document.querySelector('meta[property="og:title"]')?.getAttribute('content') ??
-        document.title ??
-        brandName,
-    );
-
     const baseUrl = safeBaseUrl(document.querySelector('base[href]')?.getAttribute('href'));
     let ignoredRelativeLinks = 0;
+
     for (const anchor of Array.from(document.querySelectorAll('a[href]'))) {
       const href = anchor.getAttribute('href')?.trim();
       if (!href) continue;
@@ -56,6 +45,7 @@ export function parsePartnerText(fileName: string, source: string): ParsedPartne
       const name = cleanName(anchor.textContent ?? '') || cleanName(imageName);
       addCandidate(candidates, name, href, baseUrl ?? undefined);
     }
+
     if (ignoredRelativeLinks > 0) {
       warnings.push(
         `${ignoredRelativeLinks} relative link${ignoredRelativeLinks === 1 ? ' was' : 's were'} ignored because the text file did not provide a secure base URL.`,
@@ -84,7 +74,7 @@ export function parsePartnerText(fileName: string, source: string): ParsedPartne
 
   return {
     fileName,
-    brandName: cleanName(brandName) || 'Imported Partners',
+    categoryName: categoryNameFromFile(fileName),
     sites,
     warnings,
   };
@@ -116,6 +106,7 @@ function addCandidate(
   } catch {
     return;
   }
+
   if (url.protocol !== 'https:' || url.username || url.password || URL_BLOCKLIST.test(url.href)) {
     return;
   }
@@ -151,8 +142,9 @@ function cleanName(value: string): string {
   return value.replace(/\s+/g, ' ').trim().slice(0, 100);
 }
 
-function fileStem(fileName: string): string {
-  return fileName.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
+function categoryNameFromFile(fileName: string): string {
+  const name = cleanName(fileName.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '));
+  return name || 'Imported Partners';
 }
 
 function nameFromHostname(hostname: string): string {

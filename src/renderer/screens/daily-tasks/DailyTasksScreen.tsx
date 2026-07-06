@@ -22,6 +22,7 @@ import {
 import { PartnerImportDialog } from './components/PartnerImportDialog';
 import { TaskCategoryCard } from './components/TaskCategoryCard';
 import { TaskCategoryDialog } from './components/TaskCategoryDialog';
+import { TextFileImportDialog } from './components/TextFileImportDialog';
 
 type FeedbackTone = 'success' | 'info' | 'danger';
 
@@ -52,7 +53,8 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
   const [editorPending, setEditorPending] = useState(false);
   const [deleteCategory, setDeleteCategory] = useState<RendererTaskCategory | null>(null);
   const [deletePending, setDeletePending] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
+  const [partnerImportOpen, setPartnerImportOpen] = useState(false);
+  const [textImportOpen, setTextImportOpen] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const feedbackTimer = useRef<number | null>(null);
 
@@ -394,9 +396,17 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
             size="small"
             variant="secondary"
             leadingIcon={<ImportIcon size={16} />}
-            onClick={() => setImportOpen(true)}
+            onClick={() => setPartnerImportOpen(true)}
           >
             Import partner page
+          </Button>
+          <Button
+            size="small"
+            variant="secondary"
+            leadingIcon={<ImportIcon size={16} />}
+            onClick={() => setTextImportOpen(true)}
+          >
+            Import .txt
           </Button>
           <Button
             size="small"
@@ -481,8 +491,8 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
             </span>
             <h2 id="daily-tasks-empty-title">Build your first daily workflow</h2>
             <p>
-              Create a category manually or extract partner links from a public HTTPS partnership
-              page.
+              Create a category manually, extract a public partnership page, or import partner links
+              from a local .txt file.
             </p>
             <div>
               <Button
@@ -495,9 +505,16 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
               <Button
                 variant="secondary"
                 leadingIcon={<ImportIcon size={16} />}
-                onClick={() => setImportOpen(true)}
+                onClick={() => setPartnerImportOpen(true)}
               >
                 Import partner page
+              </Button>
+              <Button
+                variant="secondary"
+                leadingIcon={<ImportIcon size={16} />}
+                onClick={() => setTextImportOpen(true)}
+              >
+                Import .txt
               </Button>
             </div>
           </section>
@@ -518,9 +535,17 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
       />
 
       <PartnerImportDialog
-        open={importOpen}
+        open={partnerImportOpen}
         categoryCount={categories.length}
-        onClose={() => setImportOpen(false)}
+        onClose={() => setPartnerImportOpen(false)}
+        onImported={imported}
+        onFeedback={showFeedback}
+      />
+
+      <TextFileImportDialog
+        open={textImportOpen}
+        categoryCount={categories.length}
+        onClose={() => setTextImportOpen(false)}
         onImported={imported}
         onFeedback={showFeedback}
       />

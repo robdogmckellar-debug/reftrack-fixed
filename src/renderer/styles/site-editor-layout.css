@@ -1,0 +1,30 @@
+.site-editor-screen {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.site-editor-list-panel,
+.site-editor-form-panel,
+.site-editor-empty-panel {
+  height: 100%;
+  max-height: 100%;
+}
+
+.site-editor-form {
+  overflow: hidden;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.site-editor-form:has(> .site-editor-command-error) {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.site-editor-form__header,
+.site-editor-command-error,
+.site-editor-form__actions {
+  min-height: 0;
+}
+
+.site-editor-form__scroll-region {
+  min-height: 0;
+  overflow: auto;
+}

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractPartnerData } from '../../src/main/importer/static-extractor';
 import { validateImporterUrl } from '../../src/main/importer/network-policy';
+import { extractPartnerData } from '../../src/main/importer/static-extractor';
+import { toImporterResult } from '../../src/main/importer/types';
 import {
   isLikelyReferralUrl,
   partnerUrlDeduplicationKey,
@@ -41,6 +42,33 @@ describe('partner URL recognition', () => {
     expect(partnerUrlDeduplicationKey('https://shared.win/promotions')).toBe(
       partnerUrlDeduplicationKey('https://shared.win/games'),
     );
+  });
+
+  it('preserves shared-host referral codes when static and browser results are merged', () => {
+    const result = toImporterResult(
+      {
+        brandName: 'Partner Group',
+        sites: [{ name: 'Alpha', url: 'https://shared.win/RFALPHA123' }],
+        confidence: 0.8,
+        warnings: [],
+        sourceUrl: 'https://group.online/partners',
+        finalUrl: 'https://group.online/partners',
+        redirectCount: 0,
+        requiresBrowserFallback: true,
+      },
+      {
+        brandName: 'Partner Group',
+        sites: [{ name: 'Bravo', url: 'https://shared.win/RFBRAVO456' }],
+        confidence: 0.9,
+        warnings: [],
+        finalUrl: 'https://group.online/partners',
+      },
+    );
+
+    expect(result.sites.map((site) => site.url)).toEqual([
+      'https://shared.win/RFBRAVO456',
+      'https://shared.win/RFALPHA123',
+    ]);
   });
 
   it('extracts new TLDs, same-host referral paths and referral URLs embedded in scripts', () => {

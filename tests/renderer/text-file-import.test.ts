@@ -8,7 +8,7 @@ describe('Daily Tasks partner text-file import', () => {
       'Gold-Group-Partnership.txt',
       [
         'ButtonBg, https://rr4winau.icu/RFGOLD3GROUP',
-        'Lucky Nine | https://pg9aus.vip/RFGOLD1GROUP',
+        'Lucky Nine | https://pg9aus.vip/register?ref=RFGOLD1GROUP',
         'https://h4winaus.bet/RFGOLD2GROUP',
       ].join('\n'),
     );
@@ -17,7 +17,7 @@ describe('Daily Tasks partner text-file import', () => {
     expect(result.sites).toEqual(
       expect.arrayContaining([
         { name: 'ButtonBg', url: 'https://rr4winau.icu/RFGOLD3GROUP' },
-        { name: 'Lucky Nine', url: 'https://pg9aus.vip/RFGOLD1GROUP' },
+        { name: 'Lucky Nine', url: 'https://pg9aus.vip/register?ref=RFGOLD1GROUP' },
         { name: 'H4winaus', url: 'https://h4winaus.bet/RFGOLD2GROUP' },
       ]),
     );

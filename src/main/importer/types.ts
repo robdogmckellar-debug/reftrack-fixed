@@ -3,7 +3,11 @@ import type {
   ImporterProgressEvent,
   ImporterResult,
 } from '../../shared/ipc/contract';
-import { partnerUrlDeduplicationKey } from '../../shared/importer/partner-url';
+import {
+  isLikelyReferralUrl,
+  normalisePartnerHostname,
+  partnerUrlDeduplicationKey,
+} from '../../shared/importer/partner-url';
 
 export interface StaticImportResult {
   brandName: string;
@@ -59,9 +63,30 @@ function mergeSites(
   secondary: ImportPartnerSite[],
 ): ImportPartnerSite[] {
   const byKey = new Map<string, ImportPartnerSite>();
+  const referralHosts = new Set<string>();
+
   for (const site of [...primary, ...secondary]) {
+    let url: URL;
+    try {
+      url = new URL(site.url);
+    } catch {
+      continue;
+    }
+
+    const hostname = normalisePartnerHostname(url.hostname);
+    const referralLike = isLikelyReferralUrl(url);
     const key = partnerUrlDeduplicationKey(site.url);
-    if (key && !byKey.has(key)) byKey.set(key, site);
+    if (!hostname || !key) continue;
+
+    if (referralLike) {
+      referralHosts.add(hostname);
+      byKey.delete(`host:${hostname}`);
+    } else if (referralHosts.has(hostname)) {
+      continue;
+    }
+
+    if (!byKey.has(key)) byKey.set(key, site);
   }
+
   return [...byKey.values()].slice(0, 500);
 }

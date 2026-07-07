@@ -13,6 +13,7 @@ import {
   TrophyIcon,
 } from '../../components/icons';
 import { VisuallyHidden } from '../../design-system/VisuallyHidden';
+import { formatCurrency, formatInteger } from '../../lib/format';
 import {
   buildDayDrilldown,
   buildLeaderboard,
@@ -26,22 +27,6 @@ import {
   type StatisticsTotals,
   type YearStatistics,
 } from './statistics-model';
-
-const currencyFormatter = new Intl.NumberFormat('en-AU', {
-  style: 'currency',
-  currency: 'AUD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-const integerFormatter = new Intl.NumberFormat('en-AU', { maximumFractionDigits: 0 });
-
-function formatCurrency(value: number): string {
-  return currencyFormatter.format(value);
-}
-
-function formatInteger(value: number): string {
-  return integerFormatter.format(value);
-}
 
 function SummaryMetrics({
   totals,

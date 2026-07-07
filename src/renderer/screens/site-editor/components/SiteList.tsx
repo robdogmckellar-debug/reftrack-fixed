@@ -3,6 +3,7 @@ import type { JSX } from 'preact';
 import type { RendererSite } from '../../../../shared/view-model/renderer-snapshot';
 import { EditIcon } from '../../../components/icons';
 import { Button } from '../../../design-system/Button';
+import { formatCurrency } from '../../../lib/format';
 
 interface SiteListProps {
   sites: readonly RendererSite[];
@@ -10,14 +11,6 @@ interface SiteListProps {
   creating: boolean;
   onCreate(): boolean;
   onSelect(siteId: string): boolean;
-}
-
-function formatMoney(value: number): string {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-    minimumFractionDigits: 2,
-  }).format(value);
 }
 
 function copyLimitLabel(limit: number): string {
@@ -109,7 +102,7 @@ export function SiteList({
                 <span class="site-editor-site-option__copy">
                   <span class="site-editor-site-option__name">{site.name}</span>
                   <span class="site-editor-site-option__meta">
-                    {formatMoney(site.bonus)} bonus · {copyLimitLabel(site.maxCopiesPerDay)}
+                    {formatCurrency(site.bonus)} bonus · {copyLimitLabel(site.maxCopiesPerDay)}
                   </span>
                   <span class="site-editor-site-option__stats">
                     {site.copies} total cop{site.copies === 1 ? 'y' : 'ies'} · {site.successes}{' '}

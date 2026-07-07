@@ -1,6 +1,7 @@
 import type { ComponentType, JSX } from 'preact';
 
 import { ClipboardIcon, EarningsIcon, SuccessIcon } from '../../../components/icons';
+import { formatCurrency } from '../../../lib/format';
 import { dashboardSummary } from '../dashboard-store';
 
 interface SummaryMetric {
@@ -12,22 +13,13 @@ interface SummaryMetric {
   icon: ComponentType<{ size?: number }>;
 }
 
-function formatMoney(value: number): string {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'AUD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
 export function SummaryStrip(): JSX.Element {
   const summary = dashboardSummary.value;
   const metrics: readonly SummaryMetric[] = [
     {
       id: 'today-earnings',
       label: "Today's earnings",
-      value: formatMoney(summary.todayEarnings),
+      value: formatCurrency(summary.todayEarnings),
       detail: 'Recorded today',
       tone: 'success',
       icon: EarningsIcon,
@@ -43,7 +35,7 @@ export function SummaryStrip(): JSX.Element {
     {
       id: 'lifetime-earnings',
       label: 'Lifetime earnings',
-      value: formatMoney(summary.lifetimeEarnings),
+      value: formatCurrency(summary.lifetimeEarnings),
       detail: 'Across all sites',
       tone: 'warning',
       icon: EarningsIcon,

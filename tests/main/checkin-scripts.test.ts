@@ -10,9 +10,9 @@ describe('check-in page scripts', () => {
   it('fills credentials, dispatches events and clicks the submit control', () => {
     const script = buildFillLoginScript(
       {
-        usernameSelector: 'form input[type="text"]',
-        passwordSelector: 'form input[type="password"]',
-        submitSelector: 'form a.btn.login',
+        usernameSelectors: ['form input[type="text"]', 'input[type="email"]'],
+        passwordSelectors: ['form input[type="password"]'],
+        submitSelectors: ['form a.btn.login'],
       },
       { username: 'alice', password: 'p@ss"word' },
     );
@@ -26,12 +26,15 @@ describe('check-in page scripts', () => {
     expect(script).toContain('submit.click()');
   });
 
-  it('builds click and existence probes for a selector', () => {
-    expect(buildClickScript('.checkin-page-button-container button.checkin-page-button')).toContain(
-      'querySelector(".checkin-page-button-container button.checkin-page-button")',
-    );
-    expect(buildExistsScript('button.btn-secondary-flex')).toContain(
-      'querySelector("button.btn-secondary-flex")',
-    );
+  it('builds click and existence probes that try selectors in priority order', () => {
+    const clickScript = buildClickScript([
+      '.checkin-page-button-container button.checkin-page-button',
+      'button.checkin-page-button',
+    ]);
+    expect(clickScript).toContain('.checkin-page-button-container button.checkin-page-button');
+    expect(clickScript).toContain('button.checkin-page-button');
+
+    const existsScript = buildExistsScript(['button.btn-secondary-flex']);
+    expect(existsScript).toContain('button.btn-secondary-flex');
   });
 });

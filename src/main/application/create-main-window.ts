@@ -6,6 +6,7 @@ import type { Session } from 'electron';
 import type { PerformanceBaseline } from '../performance-baseline';
 import { APP_ENTRY_URL } from './constants';
 import { hardenMainWebContents } from './security-policy';
+import { installMainWindowRecovery } from './window-recovery';
 
 interface CreateMainWindowOptions {
   session: Session;
@@ -64,14 +65,11 @@ export async function createMainWindow(options: CreateMainWindowOptions): Promis
 
   window.removeMenu();
   hardenMainWebContents(window.webContents, rendererUrl);
+  installMainWindowRecovery(window);
   options.performanceBaseline.attachToWindow(window);
 
   window.once('ready-to-show', () => {
     if (!window.isDestroyed()) window.show();
-  });
-
-  window.on('unresponsive', () => {
-    console.error('[RefTrack] Main window became unresponsive.');
   });
 
   await window.loadURL(rendererUrl);

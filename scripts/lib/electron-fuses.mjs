@@ -1,6 +1,4 @@
-import electronFuses from '@electron/fuses';
-
-const { FuseVersion, FuseV1Options, flipFuses, getCurrentFuseWire } = electronFuses;
+import { FuseVersion, FuseV1Options, flipFuses, getCurrentFuseWire } from '@electron/fuses';
 
 if (
   !FuseVersion ||
@@ -11,9 +9,9 @@ if (
   throw new Error('The installed @electron/fuses package does not expose the expected API.');
 }
 
-// @electron/fuses is CommonJS and does not export FuseState from its public
-// entry point. getCurrentFuseWire() returns the raw fuse bytes, where ASCII
-// "0" means disabled and ASCII "1" means enabled.
+// getCurrentFuseWire() returns the raw fuse bytes, where ASCII "0" means
+// disabled and ASCII "1" means enabled. We compare against these wire bytes
+// rather than the FuseState enum so the check is independent of enum values.
 const FuseWireState = Object.freeze({
   DISABLE: '0'.charCodeAt(0),
   ENABLE: '1'.charCodeAt(0),

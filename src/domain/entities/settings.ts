@@ -20,10 +20,21 @@ export interface CheckinSettings {
   successSelector: string;
 }
 
+export interface HotkeyBindingSetting {
+  siteId: string;
+  key: string;
+}
+
+export interface HotkeySettings {
+  enabled: boolean;
+  bindings: HotkeyBindingSetting[];
+}
+
 export interface AppSettings {
   darkMode: boolean;
   imageCleaner: ImageCleanerSettings;
   checkin: CheckinSettings;
+  hotkeys: HotkeySettings;
 }
 
 export const DEFAULT_CHECKIN_SETTINGS: CheckinSettings = {

@@ -4,6 +4,7 @@ import { IPC_CHANNELS } from '../shared/ipc/channels';
 import type {
   CheckinCompletedEvent,
   CheckinProgressEvent,
+  HotkeyTriggeredEvent,
   ImageCleanupCompletedEvent,
   ImporterCompletedEvent,
   ImporterProgressEvent,
@@ -32,6 +33,19 @@ const reftrackApi: RefTrackApi = {
       ipcRenderer.invoke(IPC_CHANNELS.settingsSetImageCleanerEnabled, request),
     selectImageCleanerFolder: () =>
       ipcRenderer.invoke(IPC_CHANNELS.settingsSelectImageCleanerFolder),
+    setHotkeys: (request) => ipcRenderer.invoke(IPC_CHANNELS.settingsSetHotkeys, request),
+  },
+  window: {
+    minimize: () => ipcRenderer.invoke(IPC_CHANNELS.windowMinimize),
+  },
+  hotkeys: {
+    onTriggered: (listener) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: HotkeyTriggeredEvent): void => {
+        listener(payload);
+      };
+      ipcRenderer.on(IPC_CHANNELS.hotkeyTriggered, wrapped);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.hotkeyTriggered, wrapped);
+    },
   },
   imageCleaner: {
     onCompleted: (listener) => {

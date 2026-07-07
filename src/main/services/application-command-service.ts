@@ -6,6 +6,7 @@ import type { Site } from '../../domain/entities/site';
 import type { CheckinResultRecord, TaskCategory } from '../../domain/entities/task-category';
 import type {
   RecordSuccessResponse,
+  SetHotkeysRequest,
   SiteUpsertRequest,
   SiteUpsertResponse,
   SnapshotResponse,
@@ -207,6 +208,19 @@ export class ApplicationCommandService {
   async setImageCleanerFolder(folderPath: string): Promise<SnapshotResponse> {
     const state = await this.stateService.update((draft) => {
       draft.settings.imageCleaner.folderPath = folderPath;
+    });
+    return { snapshot: toRendererSnapshot(state) };
+  }
+
+  async setHotkeys(request: SetHotkeysRequest): Promise<SnapshotResponse> {
+    const state = await this.stateService.update((draft) => {
+      draft.settings.hotkeys = {
+        enabled: request.enabled,
+        bindings: request.bindings.map((binding) => ({
+          siteId: binding.siteId,
+          key: binding.key,
+        })),
+      };
     });
     return { snapshot: toRendererSnapshot(state) };
   }

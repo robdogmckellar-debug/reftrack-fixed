@@ -20,6 +20,7 @@ import {
   ImporterStartRequestSchema,
   OpenExternalRequestSchema,
   RecordSuccessRequestSchema,
+  SetHotkeysRequestSchema,
   SetImageCleanerEnabledRequestSchema,
   SiteDeleteRequestSchema,
   SiteUpsertRequestSchema,
@@ -36,6 +37,7 @@ import { ImportCoordinator } from '../importer/import-coordinator';
 import { ApplicationCommandService } from '../services/application-command-service';
 import { CopyActionService } from '../services/copy-action-service';
 import { ApplicationError } from '../services/application-error';
+import type { HotkeyService } from '../services/hotkey-service';
 import { ImageCleanerService, ImageCleanupCoordinator } from '../services/image-cleaner-service';
 import type { StateService } from '../services/state-service';
 import { assertTrustedIpcSender } from './validate-sender';
@@ -50,6 +52,7 @@ const credentialCrypto: CredentialCrypto = {
 export interface RegisterIpcHandlersOptions {
   getMainWindow(): BrowserWindow | null;
   stateService: StateService;
+  hotkeyService: HotkeyService;
   development: boolean;
   developmentRendererUrl?: string;
   importerWorkerPath: string;
@@ -141,12 +144,16 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
     userDataPath: app.getPath('userData'),
   }));
 
-  registerHandler(IPC_CHANNELS.sitesUpsert, SiteUpsertRequestSchema, (request) =>
-    commands.upsertSite(request),
-  );
-  registerHandler(IPC_CHANNELS.sitesDelete, SiteDeleteRequestSchema, (request) =>
-    commands.deleteSite(request.siteId, request.occurredAt),
-  );
+  registerHandler(IPC_CHANNELS.sitesUpsert, SiteUpsertRequestSchema, async (request) => {
+    const response = await commands.upsertSite(request);
+    syncHotkeys();
+    return response;
+  });
+  registerHandler(IPC_CHANNELS.sitesDelete, SiteDeleteRequestSchema, async (request) => {
+    const response = await commands.deleteSite(request.siteId, request.occurredAt);
+    syncHotkeys();
+    return response;
+  });
   registerHandler(IPC_CHANNELS.activityClear, EmptyRequestSchema, () => commands.clearActivity());
 
   registerHandler(IPC_CHANNELS.actionsCopyLink, CopyLinkRequestSchema, (request) =>
@@ -165,6 +172,19 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
     SetImageCleanerEnabledRequestSchema,
     (request) => commands.setImageCleanerEnabled(request.enabled),
   );
+
+  registerHandler(IPC_CHANNELS.settingsSetHotkeys, SetHotkeysRequestSchema, async (request) => {
+    const response = await commands.setHotkeys(request);
+    syncHotkeys();
+    return response;
+  });
+
+  registerHandler(IPC_CHANNELS.windowMinimize, EmptyRequestSchema, () => {
+    const window = options.getMainWindow();
+    if (!window || window.isDestroyed() || !window.isMinimizable()) return { minimized: false };
+    window.minimize();
+    return { minimized: true };
+  });
 
   registerHandler(
     IPC_CHANNELS.settingsSelectImageCleanerFolder,
@@ -313,6 +333,10 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
       for (const channel of Object.values(IPC_CHANNELS)) ipcMain.removeHandler(channel);
     },
   };
+
+  function syncHotkeys(): void {
+    options.hotkeyService.sync(options.stateService.getSnapshot());
+  }
 
   function registerHandler<TSchema extends z.ZodTypeAny, TResponse>(
     channel: string,

@@ -105,6 +105,10 @@ const DEFAULT_STATE: AppStateV1 = {
       folderPath: null,
     },
     checkin: { ...DEFAULT_CHECKIN_SETTINGS },
+    hotkeys: {
+      enabled: true,
+      bindings: [],
+    },
   },
   taskCategories: [],
   taskDailyRecords: {},

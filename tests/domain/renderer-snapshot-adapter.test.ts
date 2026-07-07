@@ -39,6 +39,21 @@ describe('renderer snapshot adapter', () => {
     expect(site?.earnings).toBe(30);
   });
 
+  it('maps hotkey settings into the renderer snapshot', () => {
+    const state = createDefaultAppState();
+    state.settings.hotkeys = {
+      enabled: false,
+      bindings: [{ siteId: 'u2win', key: 'F3' }],
+    };
+
+    const snapshot = toRendererSnapshot(state);
+
+    expect(snapshot.settings.hotkeys).toEqual({
+      enabled: false,
+      bindings: [{ siteId: 'u2win', key: 'F3' }],
+    });
+  });
+
   it('deep-clones task collections so canonical state is not shared with the snapshot', () => {
     const state = createDefaultAppState();
     state.taskCategories = [{ id: 'category-a', name: 'Category A', colour: 'teal', sites: [] }];

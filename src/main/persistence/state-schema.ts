@@ -4,6 +4,7 @@ import { APP_STATE_SCHEMA_VERSION, type AppStateV1 } from '../../domain/app-stat
 import { isValidIsoDate, isValidIsoTimestamp } from '../../shared/date/iso-date';
 import { TASK_COLOURS } from '../../domain/entities/task-category';
 import { DEFAULT_CHECKIN_SETTINGS } from '../../domain/entities/settings';
+import { isValidHotkeyKey } from '../../shared/hotkeys/bindings';
 
 const EntityIdSchema = z.string().trim().min(1).max(160);
 const NonNegativeSafeIntegerSchema = z.number().int().nonnegative().safe();
@@ -121,6 +122,27 @@ export const AppStateV1Schema = z
           })
           .strict(),
         checkin: CheckinSettingsSchema.default({ ...DEFAULT_CHECKIN_SETTINGS }),
+        hotkeys: z
+          .object({
+            enabled: z.boolean(),
+            bindings: z
+              .array(
+                z
+                  .object({
+                    siteId: EntityIdSchema,
+                    key: z
+                      .string()
+                      .refine(
+                        (value) => value === '' || isValidHotkeyKey(value),
+                        'Expected a supported hotkey key',
+                      ),
+                  })
+                  .strict(),
+              )
+              .max(1000),
+          })
+          .strict()
+          .default({ enabled: true, bindings: [] }),
       })
       .strict(),
     taskCategories: z.array(TaskCategorySchema).max(500),

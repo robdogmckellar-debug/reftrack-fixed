@@ -38,10 +38,7 @@ const reftrackApi: RefTrackApi = {
   },
   hotkeys: {
     onTriggered: (listener) => {
-      const wrapped = (
-        _event: Electron.IpcRendererEvent,
-        payload: HotkeyTriggeredEvent,
-      ): void => {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: HotkeyTriggeredEvent): void => {
         listener(payload);
       };
       ipcRenderer.on(IPC_CHANNELS.hotkeyTriggered, wrapped);

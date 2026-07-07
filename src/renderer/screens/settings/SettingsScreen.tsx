@@ -261,10 +261,11 @@ function HotkeysPanel(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
 
   const effective = useMemo(
-    () => resolveHotkeyBindings(
-      sites.map((site) => site.id),
-      hotkeys,
-    ),
+    () =>
+      resolveHotkeyBindings(
+        sites.map((site) => site.id),
+        hotkeys,
+      ),
     [sites, hotkeys],
   );
 
@@ -346,9 +347,7 @@ function HotkeysPanel(): JSX.Element {
           description="While enabled, the assigned keys are reserved for RefTrack across your whole computer."
           checked={hotkeys.enabled}
           pending={pending}
-          onChange={(checked) =>
-            void save({ enabled: checked, bindings: hotkeys.bindings })
-          }
+          onChange={(checked) => void save({ enabled: checked, bindings: hotkeys.bindings })}
         />
       </div>
 

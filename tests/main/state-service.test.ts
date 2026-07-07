@@ -1,9 +1,10 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { createDefaultAppState } from '../../src/domain/defaults';
 import { StateService } from '../../src/main/services/state-service';
 
 const temporaryDirectories: string[] = [];
@@ -59,6 +60,24 @@ describe('serial state service', () => {
     snapshot.sites[0]!.name = 'MUTATED';
 
     expect(service.getSnapshot().sites[0]!.name).toBe('U2WIN');
+  });
+
+  it('loads legacy state without hotkey settings by applying the default', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'reftrack-service-'));
+    temporaryDirectories.push(directory);
+    const filePath = path.join(directory, 'state.json');
+
+    const legacy = createDefaultAppState() as Record<string, unknown>;
+    const settings = { ...(legacy.settings as Record<string, unknown>) };
+    delete settings.hotkeys;
+    legacy.settings = settings;
+    await writeFile(filePath, JSON.stringify(legacy, null, 2), 'utf8');
+
+    const { service, initialisation } = await StateService.create({ filePath });
+
+    expect(initialisation.source).toBe('primary');
+    expect(initialisation.recovered).toBe(false);
+    expect(service.getSnapshot().settings.hotkeys).toEqual({ enabled: true, bindings: [] });
   });
 
   it('keeps the current state unchanged when validation rejects a replacement', async () => {

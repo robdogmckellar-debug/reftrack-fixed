@@ -51,8 +51,4 @@ export function hardenMainWebContents(
       event.preventDefault();
     }
   });
-
-  webContents.on('render-process-gone', (_event, details) => {
-    console.error('[RefTrack] Renderer process terminated:', details.reason);
-  });
 }

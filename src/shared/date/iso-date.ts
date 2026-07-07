@@ -14,6 +14,14 @@ export function isValidIsoDate(value: string): boolean {
   );
 }
 
+const ISO_TIMESTAMP_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
+
+/**
+ * Strict ISO-8601 date-time check that matches the format produced by
+ * `Date.prototype.toISOString()` (and the IPC boundary's `z.string().datetime`),
+ * so persistence and the IPC layer agree on what a valid timestamp is.
+ */
 export function isValidIsoTimestamp(value: string): boolean {
-  return Number.isFinite(Date.parse(value));
+  return ISO_TIMESTAMP_PATTERN.test(value) && Number.isFinite(Date.parse(value));
 }

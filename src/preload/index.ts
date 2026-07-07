@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 import { IPC_CHANNELS } from '../shared/ipc/channels';
 import type {
+  CheckinCompletedEvent,
+  CheckinProgressEvent,
   ImageCleanupCompletedEvent,
   ImporterCompletedEvent,
   ImporterProgressEvent,
@@ -74,6 +76,32 @@ const reftrackApi: RefTrackApi = {
       };
       ipcRenderer.on(IPC_CHANNELS.importerCompleted, wrapped);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.importerCompleted, wrapped);
+    },
+  },
+  checkin: {
+    start: (request) => ipcRenderer.invoke(IPC_CHANNELS.checkinStart, request),
+    cancel: (request) => ipcRenderer.invoke(IPC_CHANNELS.checkinCancel, request),
+    saveCredentials: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.checkinSaveCredentials, request),
+    deleteCredentials: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.checkinDeleteCredentials, request),
+    credentialStatus: () => ipcRenderer.invoke(IPC_CHANNELS.checkinCredentialStatus),
+    onProgress: (listener) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: CheckinProgressEvent): void => {
+        listener(payload);
+      };
+      ipcRenderer.on(IPC_CHANNELS.checkinProgress, wrapped);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.checkinProgress, wrapped);
+    },
+    onCompleted: (listener) => {
+      const wrapped = (
+        _event: Electron.IpcRendererEvent,
+        payload: CheckinCompletedEvent,
+      ): void => {
+        listener(payload);
+      };
+      ipcRenderer.on(IPC_CHANNELS.checkinCompleted, wrapped);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.checkinCompleted, wrapped);
     },
   },
 };

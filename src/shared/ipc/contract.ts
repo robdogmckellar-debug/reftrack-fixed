@@ -202,6 +202,80 @@ export type ImporterCompletedEvent =
       };
     };
 
+export type CheckinSiteStatus = 'success' | 'failed' | 'skipped';
+
+export interface CheckinStartRequest {
+  taskSiteId: string | null;
+}
+
+export interface CheckinStartResponse {
+  runId: string;
+  targetCount: number;
+}
+
+export interface CheckinCancelRequest {
+  runId: string;
+}
+
+export interface CheckinCancelResponse {
+  cancelled: boolean;
+}
+
+export interface CheckinSaveCredentialsRequest {
+  taskSiteId: string;
+  username: string;
+  password: string;
+}
+
+export interface CheckinSaveCredentialsResponse {
+  saved: true;
+}
+
+export interface CheckinDeleteCredentialsRequest {
+  taskSiteId: string;
+}
+
+export interface CheckinDeleteCredentialsResponse {
+  deleted: boolean;
+}
+
+export interface CheckinCredentialStatusResponse {
+  taskSiteIds: string[];
+}
+
+export type CheckinProgressStage =
+  | 'starting'
+  | 'logging-in'
+  | 'dismissing-popup'
+  | 'checking-in'
+  | 'verifying'
+  | 'site-complete';
+
+export interface CheckinProgressEvent {
+  runId: string;
+  taskSiteId: string;
+  siteName: string;
+  index: number;
+  total: number;
+  stage: CheckinProgressStage;
+  message: string;
+  status: CheckinSiteStatus | null;
+}
+
+export interface CheckinSiteResult {
+  taskSiteId: string;
+  siteName: string;
+  status: CheckinSiteStatus;
+  message: string;
+}
+
+export interface CheckinCompletedEvent {
+  runId: string;
+  cancelled: boolean;
+  results: CheckinSiteResult[];
+  snapshot: RendererSnapshot;
+}
+
 export interface RefTrackApi {
   bootstrap(): Promise<IpcResult<SnapshotResponse>>;
   app: {
@@ -247,5 +321,18 @@ export interface RefTrackApi {
     cancel(request: ImporterCancelRequest): Promise<IpcResult<ImporterCancelResponse>>;
     onProgress(listener: (event: ImporterProgressEvent) => void): () => void;
     onCompleted(listener: (event: ImporterCompletedEvent) => void): () => void;
+  };
+  checkin: {
+    start(request: CheckinStartRequest): Promise<IpcResult<CheckinStartResponse>>;
+    cancel(request: CheckinCancelRequest): Promise<IpcResult<CheckinCancelResponse>>;
+    saveCredentials(
+      request: CheckinSaveCredentialsRequest,
+    ): Promise<IpcResult<CheckinSaveCredentialsResponse>>;
+    deleteCredentials(
+      request: CheckinDeleteCredentialsRequest,
+    ): Promise<IpcResult<CheckinDeleteCredentialsResponse>>;
+    credentialStatus(): Promise<IpcResult<CheckinCredentialStatusResponse>>;
+    onProgress(listener: (event: CheckinProgressEvent) => void): () => void;
+    onCompleted(listener: (event: CheckinCompletedEvent) => void): () => void;
   };
 }

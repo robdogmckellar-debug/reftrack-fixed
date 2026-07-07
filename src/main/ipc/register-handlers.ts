@@ -1,4 +1,6 @@
-import { app, clipboard, dialog, ipcMain, Notification, shell } from 'electron';
+import path from 'node:path';
+
+import { app, clipboard, dialog, ipcMain, Notification, safeStorage, shell } from 'electron';
 import type { BrowserWindow, IpcMainInvokeEvent, OpenDialogOptions } from 'electron';
 import { z } from 'zod';
 
@@ -8,6 +10,10 @@ import type { ApplicationInfo, SelectImageCleanerFolderResponse } from '../../sh
 import type { IpcFailure, IpcResult } from '../../shared/ipc/result';
 import {
   ActionNotificationRequestSchema,
+  CheckinCancelRequestSchema,
+  CheckinDeleteCredentialsRequestSchema,
+  CheckinSaveCredentialsRequestSchema,
+  CheckinStartRequestSchema,
   CopyLinkRequestSchema,
   EmptyRequestSchema,
   ImporterCancelRequestSchema,
@@ -23,6 +29,9 @@ import {
   TaskCompletionsRequestSchema,
   UndoSuccessRequestSchema,
 } from '../../shared/ipc/schemas';
+import { CheckinCoordinator } from '../checkin/checkin-coordinator';
+import { CredentialStore } from '../checkin/credential-store';
+import type { CredentialCrypto } from '../checkin/credential-store';
 import { ImportCoordinator } from '../importer/import-coordinator';
 import { ApplicationCommandService } from '../services/application-command-service';
 import { CopyActionService } from '../services/copy-action-service';
@@ -31,6 +40,12 @@ import { ImageCleanerService, ImageCleanupCoordinator } from '../services/image-
 import type { StateService } from '../services/state-service';
 import { assertTrustedIpcSender } from './validate-sender';
 import { validateExternalUrl } from './url-policy';
+
+const credentialCrypto: CredentialCrypto = {
+  isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+  encryptString: (plainText) => safeStorage.encryptString(plainText),
+  decryptString: (encrypted) => safeStorage.decryptString(encrypted),
+};
 
 export interface RegisterIpcHandlersOptions {
   getMainWindow(): BrowserWindow | null;
@@ -75,6 +90,38 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
       window.webContents.send(IPC_CHANNELS.importerCompleted, event);
     },
   });
+
+  const sendToWindow = (channel: string, payload: unknown): void => {
+    const window = options.getMainWindow();
+    if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return;
+    window.webContents.send(channel, payload);
+  };
+
+  const credentialStore = new CredentialStore(
+    path.join(app.getPath('userData'), 'reftrack-credentials-v1.bin'),
+    credentialCrypto,
+  );
+
+  const checkin = new CheckinCoordinator({
+    getState: () => options.stateService.getSnapshot(),
+    getCredentials: (taskSiteId) => credentialStore.get(taskSiteId),
+    persistResult: (date, taskSiteId, result) =>
+      commands.recordCheckinResult(date, taskSiteId, result),
+    onProgress: (event) => sendToWindow(IPC_CHANNELS.checkinProgress, event),
+    onCompleted: (event) =>
+      sendToWindow(IPC_CHANNELS.checkinCompleted, {
+        ...event,
+        snapshot: commands.getRendererSnapshot(),
+      }),
+  });
+
+  const pruneCheckinCredentials = async (): Promise<void> => {
+    const state = options.stateService.getSnapshot();
+    const ids = state.taskCategories.flatMap((category) =>
+      category.sites.map((site) => site.id),
+    );
+    await credentialStore.pruneExcept(ids);
+  };
   const senderOptions = {
     getMainWindow: options.getMainWindow,
     development: options.development,
@@ -162,11 +209,23 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
     },
   );
 
-  registerHandler(IPC_CHANNELS.tasksUpsertCategory, TaskCategoryUpsertRequestSchema, (request) =>
-    commands.upsertTaskCategory(request.category),
+  registerHandler(
+    IPC_CHANNELS.tasksUpsertCategory,
+    TaskCategoryUpsertRequestSchema,
+    async (request) => {
+      const response = await commands.upsertTaskCategory(request.category);
+      await pruneCheckinCredentials();
+      return response;
+    },
   );
-  registerHandler(IPC_CHANNELS.tasksDeleteCategory, TaskCategoryDeleteRequestSchema, (request) =>
-    commands.deleteTaskCategory(request.categoryId),
+  registerHandler(
+    IPC_CHANNELS.tasksDeleteCategory,
+    TaskCategoryDeleteRequestSchema,
+    async (request) => {
+      const response = await commands.deleteTaskCategory(request.categoryId);
+      await pruneCheckinCredentials();
+      return response;
+    },
   );
   registerHandler(IPC_CHANNELS.tasksSetCompletion, TaskCompletionRequestSchema, (request) =>
     commands.setTaskCompletion(request.date, request),
@@ -219,9 +278,40 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
     cancelled: importer.cancel(request.jobId),
   }));
 
+  registerHandler(IPC_CHANNELS.checkinStart, CheckinStartRequestSchema, (request) =>
+    checkin.start(request),
+  );
+
+  registerHandler(IPC_CHANNELS.checkinCancel, CheckinCancelRequestSchema, (request) => ({
+    cancelled: checkin.cancel(request.runId),
+  }));
+
+  registerHandler(
+    IPC_CHANNELS.checkinSaveCredentials,
+    CheckinSaveCredentialsRequestSchema,
+    async (request) => {
+      await credentialStore.set(request.taskSiteId, {
+        username: request.username,
+        password: request.password,
+      });
+      return { saved: true as const };
+    },
+  );
+
+  registerHandler(
+    IPC_CHANNELS.checkinDeleteCredentials,
+    CheckinDeleteCredentialsRequestSchema,
+    async (request) => ({ deleted: await credentialStore.delete(request.taskSiteId) }),
+  );
+
+  registerHandler(IPC_CHANNELS.checkinCredentialStatus, EmptyRequestSchema, async () => ({
+    taskSiteIds: await credentialStore.listIds(),
+  }));
+
   return {
     dispose: () => {
       importer.dispose();
+      checkin.dispose();
       for (const channel of Object.values(IPC_CHANNELS)) ipcMain.removeHandler(channel);
     },
   };

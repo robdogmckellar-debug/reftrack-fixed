@@ -57,11 +57,20 @@ export const UndoSuccessRequestSchema = z
 
 export const SetImageCleanerEnabledRequestSchema = z.object({ enabled: z.boolean() }).strict();
 
+const TaskSiteCheckinSchema = z
+  .object({
+    enabled: z.boolean(),
+    loginPath: z.string().max(2048).optional(),
+    checkinPath: z.string().max(2048).optional(),
+  })
+  .strict();
+
 const TaskSiteSchema = z
   .object({
     id: EntityIdSchema,
     name: z.string().trim().min(1).max(100),
     url: OptionalCredentialFreeHttpsUrlSchema,
+    checkin: TaskSiteCheckinSchema.optional(),
   })
   .strict();
 
@@ -122,6 +131,24 @@ export const ImporterStartRequestSchema = z
   .strict();
 
 export const ImporterCancelRequestSchema = z.object({ jobId: EntityIdSchema }).strict();
+
+export const CheckinStartRequestSchema = z
+  .object({ taskSiteId: EntityIdSchema.nullable() })
+  .strict();
+
+export const CheckinCancelRequestSchema = z.object({ runId: EntityIdSchema }).strict();
+
+export const CheckinSaveCredentialsRequestSchema = z
+  .object({
+    taskSiteId: EntityIdSchema,
+    username: z.string().min(1).max(4096),
+    password: z.string().min(1).max(4096),
+  })
+  .strict();
+
+export const CheckinDeleteCredentialsRequestSchema = z
+  .object({ taskSiteId: EntityIdSchema })
+  .strict();
 
 function isOptionalCredentialFreeHttpsUrl(value: string): boolean {
   if (!value) return true;

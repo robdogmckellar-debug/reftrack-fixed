@@ -9,6 +9,8 @@ import type {
 import { EditIcon, PlusIcon, TrashIcon } from '../../../components/icons';
 import { Button } from '../../../design-system/Button';
 import { Dialog } from '../../../design-system/Dialog';
+import { ToggleSwitch } from '../../../design-system/ToggleSwitch';
+import { errorMessage, unwrapIpcResult } from '../../../lib/ipc-result';
 import { activeTaskSites, hasTaskCategoryErrors, validateTaskCategory } from '../daily-tasks-model';
 
 const COLOURS: ReadonlyArray<{ value: RendererTaskColour; label: string }> = [
@@ -21,6 +23,11 @@ const COLOURS: ReadonlyArray<{ value: RendererTaskColour; label: string }> = [
   { value: 'blue', label: 'Blue' },
   { value: 'pink', label: 'Pink' },
 ];
+
+interface CredentialDraft {
+  username: string;
+  password: string;
+}
 
 function createEntityId(prefix: string): string {
   return `${prefix}_${globalThis.crypto.randomUUID()}`;
@@ -50,6 +57,10 @@ export function TaskCategoryDialog({
   const [colour, setColour] = useState<RendererTaskColour>('teal');
   const [sites, setSites] = useState<RendererTaskSite[]>([createBlankSite()]);
   const [submitted, setSubmitted] = useState(false);
+  const [savedCredentialIds, setSavedCredentialIds] = useState<ReadonlySet<string>>(new Set());
+  const [credentialDrafts, setCredentialDrafts] = useState<Record<string, CredentialDraft>>({});
+  const [credentialsSaving, setCredentialsSaving] = useState(false);
+  const [credentialError, setCredentialError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -59,9 +70,39 @@ export function TaskCategoryDialog({
       category?.sites.length ? category.sites.map((site) => ({ ...site })) : [createBlankSite()],
     );
     setSubmitted(false);
+    setCredentialDrafts({});
+    setCredentialError(null);
+
+    let cancelled = false;
+    void window.reftrack.checkin
+      .credentialStatus()
+      .then((result) => {
+        if (cancelled || !result.ok) return;
+        setSavedCredentialIds(new Set(result.data.taskSiteIds));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, [category, open]);
 
   const errors = useMemo(() => validateTaskCategory(name, sites), [name, sites]);
+
+  const credentialErrors = useMemo(() => {
+    const result: Record<string, string> = {};
+    for (const site of sites) {
+      if (!site.checkin?.enabled) continue;
+      const draft = credentialDrafts[site.id];
+      const hasDraft = Boolean(draft?.username.trim() && draft?.password);
+      const partialDraft = Boolean(draft?.username.trim()) !== Boolean(draft?.password);
+      if (partialDraft) {
+        result[site.id] = 'Enter both a username and a password.';
+      } else if (!hasDraft && !savedCredentialIds.has(site.id)) {
+        result[site.id] = 'Enter the login credentials for automatic check-in.';
+      }
+    }
+    return result;
+  }, [credentialDrafts, savedCredentialIds, sites]);
 
   const addSite = (): void => {
     const next = createBlankSite();
@@ -77,6 +118,28 @@ export function TaskCategoryDialog({
     );
   };
 
+  const toggleSiteCheckin = (siteId: string, enabled: boolean): void => {
+    setSites((current) =>
+      current.map((site) => {
+        if (site.id !== siteId) return site;
+        if (enabled) return { ...site, checkin: { enabled: true } };
+        const { checkin: _removed, ...rest } = site;
+        return rest;
+      }),
+    );
+  };
+
+  const updateCredential = (
+    siteId: string,
+    field: 'username' | 'password',
+    value: string,
+  ): void => {
+    setCredentialDrafts((current) => {
+      const existing = current[siteId] ?? { username: '', password: '' };
+      return { ...current, [siteId]: { ...existing, [field]: value } };
+    });
+  };
+
   const removeSite = (siteId: string): void => {
     setSites((current) => {
       const next = current.filter((site) => site.id !== siteId);
@@ -84,10 +147,46 @@ export function TaskCategoryDialog({
     });
   };
 
+  const persistCredentials = async (savedSites: readonly RendererTaskSite[]): Promise<void> => {
+    for (const site of savedSites) {
+      const draft = credentialDrafts[site.id];
+      if (site.checkin?.enabled) {
+        if (draft && draft.username.trim() && draft.password) {
+          unwrapIpcResult(
+            await window.reftrack.checkin.saveCredentials({
+              taskSiteId: site.id,
+              username: draft.username.trim(),
+              password: draft.password,
+            }),
+          );
+        }
+      } else if (savedCredentialIds.has(site.id)) {
+        unwrapIpcResult(
+          await window.reftrack.checkin.deleteCredentials({ taskSiteId: site.id }),
+        );
+      }
+    }
+  };
+
   const submit = async (event: JSX.TargetedSubmitEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setSubmitted(true);
-    if (hasTaskCategoryErrors(errors)) return;
+    setCredentialError(null);
+    if (hasTaskCategoryErrors(errors) || Object.keys(credentialErrors).length > 0) return;
+
+    const savedSites = activeTaskSites(sites);
+
+    setCredentialsSaving(true);
+    try {
+      await persistCredentials(savedSites);
+    } catch (error) {
+      setCredentialError(
+        errorMessage(error, 'RefTrack could not securely store the login credentials.'),
+      );
+      return;
+    } finally {
+      setCredentialsSaving(false);
+    }
 
     const saved = await onSave({
       id: category?.id ?? createEntityId('category'),
@@ -98,8 +197,10 @@ export function TaskCategoryDialog({
     if (saved) setSubmitted(false);
   };
 
+  const busy = pending || credentialsSaving;
+
   const requestClose = (): void => {
-    if (!pending) onClose();
+    if (!busy) onClose();
   };
 
   return (
@@ -109,17 +210,17 @@ export function TaskCategoryDialog({
       description="Group related sites and preserve their stable daily-progress identities."
       onClose={requestClose}
       initialFocusRef={nameRef}
-      closeOnBackdrop={!pending}
+      closeOnBackdrop={!busy}
       footer={
         <>
-          <Button variant="quiet" onClick={requestClose} disabled={pending}>
+          <Button variant="quiet" onClick={requestClose} disabled={busy}>
             Cancel
           </Button>
           <Button
             variant="primary"
             type="submit"
             form="task-category-form"
-            pending={pending}
+            pending={busy}
             leadingIcon={<EditIcon size={16} />}
           >
             {category ? 'Save changes' : 'Create category'}
@@ -175,6 +276,12 @@ export function TaskCategoryDialog({
           </fieldset>
         </div>
 
+        {credentialError ? (
+          <p class="task-field__error" role="alert">
+            {credentialError}
+          </p>
+        ) : null}
+
         <section class="task-category-editor__sites" aria-labelledby="task-sites-heading">
           <header>
             <div>
@@ -186,7 +293,7 @@ export function TaskCategoryDialog({
               variant="secondary"
               leadingIcon={<PlusIcon size={15} />}
               onClick={addSite}
-              disabled={pending}
+              disabled={busy}
             >
               Add site
             </Button>
@@ -197,6 +304,10 @@ export function TaskCategoryDialog({
               const siteErrors = errors.sites[site.id];
               const nameErrorId = `task-site-${site.id}-name-error`;
               const urlErrorId = `task-site-${site.id}-url-error`;
+              const credentialErrorId = `task-site-${site.id}-credential-error`;
+              const checkinEnabled = Boolean(site.checkin?.enabled);
+              const draft = credentialDrafts[site.id];
+              const hasSavedCredentials = savedCredentialIds.has(site.id);
 
               return (
                 <div class="task-site-editor-row" key={site.id}>
@@ -255,10 +366,70 @@ export function TaskCategoryDialog({
                     aria-label={`Remove ${site.name.trim() || `site row ${index + 1}`}`}
                     title="Remove site row"
                     onClick={() => removeSite(site.id)}
-                    disabled={pending}
+                    disabled={busy}
                   >
                     <TrashIcon size={17} />
                   </button>
+
+                  <div class="task-site-editor-row__checkin">
+                    <ToggleSwitch
+                      id={`task-site-${site.id}-checkin`}
+                      label="Automatic daily check-in"
+                      description="Sign in and press this site's daily check-in button for you."
+                      checked={checkinEnabled}
+                      disabled={busy}
+                      onChange={(checked) => toggleSiteCheckin(site.id, checked)}
+                    />
+
+                    {checkinEnabled ? (
+                      <div class="task-site-checkin-credentials">
+                        <div class="task-field">
+                          <label for={`task-site-${site.id}-username`}>Username</label>
+                          <input
+                            id={`task-site-${site.id}-username`}
+                            type="text"
+                            value={draft?.username ?? ''}
+                            maxLength={4096}
+                            autoComplete="off"
+                            spellcheck={false}
+                            placeholder={hasSavedCredentials ? 'Saved — leave blank to keep' : 'Username'}
+                            aria-invalid={submitted && Boolean(credentialErrors[site.id])}
+                            onInput={(event) =>
+                              updateCredential(site.id, 'username', event.currentTarget.value)
+                            }
+                          />
+                        </div>
+                        <div class="task-field">
+                          <label for={`task-site-${site.id}-password`}>Password</label>
+                          <input
+                            id={`task-site-${site.id}-password`}
+                            type="password"
+                            value={draft?.password ?? ''}
+                            maxLength={4096}
+                            autoComplete="off"
+                            placeholder={hasSavedCredentials ? 'Saved — leave blank to keep' : 'Password'}
+                            aria-invalid={submitted && Boolean(credentialErrors[site.id])}
+                            aria-describedby={
+                              submitted && credentialErrors[site.id] ? credentialErrorId : undefined
+                            }
+                            onInput={(event) =>
+                              updateCredential(site.id, 'password', event.currentTarget.value)
+                            }
+                          />
+                        </div>
+                        {submitted && credentialErrors[site.id] ? (
+                          <span id={credentialErrorId} class="task-field__error" role="alert">
+                            {credentialErrors[site.id]}
+                          </span>
+                        ) : (
+                          <p class="task-field__hint">
+                            Credentials are encrypted on this device and never leave it except to
+                            sign in to this site.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               );
             })}

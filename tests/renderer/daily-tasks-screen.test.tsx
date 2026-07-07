@@ -36,6 +36,7 @@ function createSnapshot(overrides: Partial<RendererSnapshot> = {}): RendererSnap
       ],
     },
     tasksDailyState: {},
+    checkinDailyState: {},
     ...overrides,
   };
 }
@@ -89,6 +90,15 @@ function installApi(): ApiMocks {
           completedListener = null;
         };
       }),
+    },
+    checkin: {
+      start: vi.fn().mockResolvedValue({ ok: true, data: { runId: 'run-1', targetCount: 0 } }),
+      cancel: vi.fn().mockResolvedValue({ ok: true, data: { cancelled: true } }),
+      saveCredentials: vi.fn().mockResolvedValue({ ok: true, data: { saved: true } }),
+      deleteCredentials: vi.fn().mockResolvedValue({ ok: true, data: { deleted: true } }),
+      credentialStatus: vi.fn().mockResolvedValue({ ok: true, data: { taskSiteIds: [] } }),
+      onProgress: vi.fn(() => () => undefined),
+      onCompleted: vi.fn(() => () => undefined),
     },
   } as unknown as RefTrackApi;
 

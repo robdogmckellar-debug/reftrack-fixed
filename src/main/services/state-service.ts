@@ -65,6 +65,13 @@ export class StateService {
     return structuredClone(this.state);
   }
 
+  /**
+   * Returns the newly committed canonical state for read-only projection (e.g.
+   * `toRendererSnapshot`). This is the live canonical reference — callers must
+   * not mutate it; use {@link getSnapshot} when a mutable copy is needed. It is
+   * safe to return directly because `parseAppState` produces a fresh, fully
+   * independent object, which avoids a second full-state deep clone per write.
+   */
   replace(candidate: AppStateV1): Promise<AppStateV1> {
     return this.enqueue(async () => {
       const parsedCandidate = parseAppState(candidate);
@@ -76,10 +83,11 @@ export class StateService {
 
       await this.store.save(nextState, this.state);
       this.state = nextState;
-      return this.getSnapshot();
+      return nextState;
     });
   }
 
+  /** See {@link replace} for the read-only ownership contract of the return value. */
   update(mutator: (draft: AppStateV1) => void | AppStateV1): Promise<AppStateV1> {
     return this.enqueue(async () => {
       const draft = this.getSnapshot();
@@ -93,7 +101,7 @@ export class StateService {
 
       await this.store.save(nextState, this.state);
       this.state = nextState;
-      return this.getSnapshot();
+      return nextState;
     });
   }
 

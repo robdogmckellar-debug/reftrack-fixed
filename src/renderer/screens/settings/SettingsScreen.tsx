@@ -16,7 +16,7 @@ import { Button } from '../../design-system/Button';
 import { ToggleSwitch } from '../../design-system/ToggleSwitch';
 import { errorMessage, unwrapIpcResult } from '../../lib/ipc-result';
 
-type PendingAction = 'toggle-cleaner' | 'select-folder' | null;
+type PendingAction = 'toggle-cleaner' | 'select-folder' | 'set-hotkey' | null;
 type FeedbackTone = 'success' | 'info' | 'danger';
 
 interface Feedback {
@@ -26,6 +26,30 @@ interface Feedback {
 }
 
 const SUPPORTED_FORMATS = ['PNG', 'JPG', 'JPEG', 'JFIF', 'WebP', 'GIF', 'BMP', 'TIFF'] as const;
+
+function normalizeHotkeyKey(key: string): string | null {
+  if (/^[a-z]$/i.test(key)) return key.toUpperCase();
+  if (/^[0-9]$/.test(key)) return key;
+  if (/^F([1-9]|1[0-9]|2[0-4])$/.test(key)) return key;
+  return null;
+}
+
+function acceleratorFromKeyboardEvent(event: KeyboardEvent): string | null {
+  const modifiers: string[] = [];
+  if (event.ctrlKey || event.metaKey) modifiers.push('CommandOrControl');
+  if (event.altKey) modifiers.push('Alt');
+  if (event.shiftKey) modifiers.push('Shift');
+  const key = normalizeHotkeyKey(event.key);
+  if (!key || modifiers.length === 0) return null;
+  return [...modifiers, key].join('+');
+}
+
+function formatAccelerator(accelerator: string): string {
+  return accelerator
+    .split('+')
+    .map((part) => (part === 'CommandOrControl' ? 'Ctrl' : part))
+    .join(' + ');
+}
 
 function formatDateTime(value: string): string {
   const date = new Date(value);
@@ -244,6 +268,8 @@ export function SettingsScreen({ active }: { active: boolean }): JSX.Element {
   const snapshot = rendererSnapshot.value;
   const enabled = snapshot?.settings.folderClearEnabled ?? false;
   const folderPath = snapshot?.settings.folderClearPath ?? null;
+  const hotkey = snapshot?.settings.folderClearHotkey ?? null;
+  const [recordingHotkey, setRecordingHotkey] = useState(false);
   const status = useMemo(() => cleanerStatus(enabled, folderPath), [enabled, folderPath]);
   const [pending, setPending] = useState<PendingAction>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -374,6 +400,45 @@ export function SettingsScreen({ active }: { active: boolean }): JSX.Element {
     }
   };
 
+  const applyHotkey = async (accelerator: string | null): Promise<void> => {
+    if (pending) return;
+    setPending('set-hotkey');
+    setFeedback(null);
+    try {
+      const response = unwrapIpcResult(
+        await window.reftrack.settings.setImageCleanerHotkey({ hotkey: accelerator }),
+      );
+      publishSnapshot(response.snapshot);
+      setFeedback({
+        tone: 'success',
+        title: accelerator ? 'Shortcut set' : 'Shortcut cleared',
+        message: accelerator
+          ? `Press ${formatAccelerator(accelerator)} anytime to run cleanup.`
+          : 'The global cleanup shortcut was removed.',
+      });
+    } catch (error) {
+      setFeedback({
+        tone: 'danger',
+        title: 'Shortcut was not set',
+        message: errorMessage(error, 'RefTrack could not set that shortcut.'),
+      });
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const captureHotkey = (event: JSX.TargetedKeyboardEvent<HTMLButtonElement>): void => {
+    event.preventDefault();
+    if (event.key === 'Escape' || event.key === 'Tab') {
+      setRecordingHotkey(false);
+      return;
+    }
+    const accelerator = acceleratorFromKeyboardEvent(event);
+    if (!accelerator) return;
+    setRecordingHotkey(false);
+    void applyHotkey(accelerator);
+  };
+
   return (
     <main
       id="tab-settings"
@@ -489,6 +554,47 @@ export function SettingsScreen({ active }: { active: boolean }): JSX.Element {
                   ? 'Clear verified images from the folder now, without a Copy Link — handy once the day’s copies are done.'
                   : 'Choose a folder above to enable manual cleanup.'}
               </span>
+            </div>
+
+            <div class="settings-hotkey">
+              <div class="settings-hotkey__copy">
+                <span class="settings-hotkey__label">Global shortcut</span>
+                {hotkey ? (
+                  <kbd class="settings-hotkey__value">{formatAccelerator(hotkey)}</kbd>
+                ) : (
+                  <span class="settings-hotkey__empty">No shortcut set</span>
+                )}
+                <span class="settings-hotkey__hint">
+                  Runs cleanup from anywhere, even when RefTrack is not focused. Use a modifier
+                  (Ctrl/Alt/Shift) plus a key.
+                </span>
+              </div>
+              <div class="settings-hotkey__actions">
+                <Button
+                  size="small"
+                  variant="secondary"
+                  pending={pending === 'set-hotkey'}
+                  disabled={pending !== null}
+                  onClick={() => setRecordingHotkey((value) => !value)}
+                  onKeyDown={recordingHotkey ? captureHotkey : undefined}
+                >
+                  {recordingHotkey
+                    ? 'Press a shortcut… (Esc)'
+                    : hotkey
+                      ? 'Change shortcut'
+                      : 'Set shortcut'}
+                </Button>
+                {hotkey ? (
+                  <Button
+                    size="small"
+                    variant="quiet"
+                    disabled={pending !== null}
+                    onClick={() => void applyHotkey(null)}
+                  >
+                    Clear
+                  </Button>
+                ) : null}
+              </div>
             </div>
 
             <div class="settings-format-section">

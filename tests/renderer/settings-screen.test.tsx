@@ -46,6 +46,7 @@ interface ApiMocks {
   getInfo: ReturnType<typeof vi.fn>;
   setEnabled: ReturnType<typeof vi.fn>;
   selectFolder: ReturnType<typeof vi.fn>;
+  setHotkey: ReturnType<typeof vi.fn>;
   runCleanup: ReturnType<typeof vi.fn>;
   emitCleanup(event: ImageCleanupCompletedEvent): void;
 }
@@ -55,6 +56,7 @@ function installApi(): ApiMocks {
   const getInfo = vi.fn().mockResolvedValue({ ok: true, data: APPLICATION_INFO });
   const setEnabled = vi.fn();
   const selectFolder = vi.fn();
+  const setHotkey = vi.fn();
   const runCleanup = vi.fn();
 
   const api = {
@@ -66,6 +68,7 @@ function installApi(): ApiMocks {
     settings: {
       setImageCleanerEnabled: setEnabled,
       selectImageCleanerFolder: selectFolder,
+      setImageCleanerHotkey: setHotkey,
     },
     imageCleaner: {
       run: runCleanup,
@@ -97,6 +100,7 @@ function installApi(): ApiMocks {
     getInfo,
     setEnabled,
     selectFolder,
+    setHotkey,
     runCleanup,
     emitCleanup: (event) => cleanupListener?.(event),
   };
@@ -225,6 +229,35 @@ describe('SettingsScreen', () => {
     });
 
     expect(await screen.findByText('Cleanup completed')).toBeTruthy();
+  });
+
+  it('records a global shortcut and saves it through typed IPC', async () => {
+    const mocks = installApi();
+    mocks.setHotkey.mockResolvedValue({
+      ok: true,
+      data: {
+        snapshot: createSnapshot({
+          settings: {
+            darkMode: true,
+            folderClearEnabled: false,
+            folderClearPath: null,
+            folderClearHotkey: 'CommandOrControl+Shift+K',
+          },
+        }),
+      },
+    });
+
+    publishSnapshot(createSnapshot());
+    render(<SettingsScreen active />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set shortcut' }));
+    const recorder = screen.getByRole('button', { name: 'Press a shortcut… (Esc)' });
+    fireEvent.keyDown(recorder, { key: 'k', ctrlKey: true, shiftKey: true });
+
+    await waitFor(() =>
+      expect(mocks.setHotkey).toHaveBeenCalledWith({ hotkey: 'CommandOrControl+Shift+K' }),
+    );
+    expect(await screen.findByText('Shortcut set')).toBeTruthy();
   });
 
   it('keeps and renders the most recent cleanup result while the screen is mounted', async () => {

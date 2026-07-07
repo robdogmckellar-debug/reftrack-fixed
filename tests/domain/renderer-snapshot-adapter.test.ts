@@ -1,75 +1,51 @@
 import { describe, expect, it } from 'vitest';
 
 import { createDefaultAppState } from '../../src/domain/defaults';
-import {
-  toCanonicalAppState,
-  toLegacyAppData,
-  type LegacyAppData,
-} from '../../src/main/view-model/renderer-snapshot-adapter';
+import { toRendererSnapshot } from '../../src/main/view-model/renderer-snapshot-adapter';
 
 describe('renderer snapshot adapter', () => {
-  it('round-trips integer currency and historical records without pruning', () => {
+  it('converts integer currency to dollars and retains historical records without pruning', () => {
     const state = createDefaultAppState();
     state.dailyRecords['2019-01-01'] = {
       u2win: { copies: 4, successes: 2, earningsCents: 6000 },
     };
 
-    const legacy = toLegacyAppData(state);
-    expect(legacy.dailyState['2019-01-01']?.u2win).toEqual({
+    const snapshot = toRendererSnapshot(state);
+
+    expect(snapshot.dailyState['2019-01-01']?.u2win).toEqual({
       copies: 4,
       successes: 2,
       earnings: 60,
     });
-    expect(legacy.lifetimeEarnings).toBe(60);
-
-    const canonical = toCanonicalAppState(legacy, state);
-    expect(canonical.dailyRecords['2019-01-01']?.u2win?.earningsCents).toBe(6000);
+    expect(snapshot.lifetimeEarnings).toBe(60);
+    expect(snapshot.lifetimeSuccesses).toBe(2);
   });
 
-  it('preserves task-site IDs across reordering and removes orphan progress', () => {
-    const previous = createDefaultAppState();
-    const legacy: LegacyAppData = {
-      sites: toLegacyAppData(previous).sites,
-      dailyState: {},
-      activity: [],
-      settings: {
-        darkMode: true,
-        folderClearEnabled: false,
-      },
-      tasks: {
-        categories: [
-          {
-            id: 'category-a',
-            name: 'Category A',
-            colour: 'teal',
-            sites: [
-              { id: 'site-b', name: 'B', url: 'https://b.example' },
-              { id: 'site-a', name: 'A', url: 'https://a.example' },
-            ],
-          },
-        ],
-      },
-      tasksDailyState: {
-        '2026-06-30': {
-          'category-a': {
-            'site-a': true,
-            'site-b': false,
-            removed: true,
-          },
-          removedCategory: {
-            removed: true,
-          },
-        },
-      },
+  it('projects per-site lifetime totals across all recorded days', () => {
+    const state = createDefaultAppState();
+    state.dailyRecords['2024-01-01'] = {
+      u2win: { copies: 1, successes: 1, earningsCents: 3000 },
+    };
+    state.dailyRecords['2024-01-02'] = {
+      u2win: { copies: 2, successes: 0, earningsCents: 0 },
     };
 
-    const canonical = toCanonicalAppState(legacy, previous);
-    expect(canonical.taskCategories[0]?.sites.map((site) => site.id)).toEqual(['site-b', 'site-a']);
-    expect(canonical.taskDailyRecords['2026-06-30']).toEqual({
-      'category-a': {
-        'site-a': true,
-        'site-b': false,
-      },
-    });
+    const snapshot = toRendererSnapshot(state);
+    const site = snapshot.sites.find((candidate) => candidate.id === 'u2win');
+
+    expect(site).toBeDefined();
+    expect(site?.copies).toBe(3);
+    expect(site?.successes).toBe(1);
+    expect(site?.earnings).toBe(30);
+  });
+
+  it('deep-clones task collections so canonical state is not shared with the snapshot', () => {
+    const state = createDefaultAppState();
+    state.taskCategories = [{ id: 'category-a', name: 'Category A', colour: 'teal', sites: [] }];
+
+    const snapshot = toRendererSnapshot(state);
+    snapshot.tasks.categories[0]!.name = 'Mutated';
+
+    expect(state.taskCategories[0]?.name).toBe('Category A');
   });
 });

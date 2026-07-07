@@ -12,8 +12,12 @@ describe('Daily Tasks category expansion', () => {
     const screen = read('src/renderer/screens/daily-tasks/DailyTasksScreen.tsx');
 
     expect(screen).toContain('const initialExpansionApplied = useRef(false);');
-    expect(screen).toContain('if (initialExpansionApplied.current || sortedCategories.length === 0) return;');
+    expect(screen).toContain(
+      'if (initialExpansionApplied.current || sortedCategories.length === 0) return;',
+    );
     expect(screen).toContain('initialExpansionApplied.current = true;');
-    expect(screen).not.toContain('if (expandedCategoryIds.size > 0 || sortedCategories.length === 0) return;');
+    expect(screen).not.toContain(
+      'if (expandedCategoryIds.size > 0 || sortedCategories.length === 0) return;',
+    );
   });
 });

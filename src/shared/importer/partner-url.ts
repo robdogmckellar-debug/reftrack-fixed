@@ -31,7 +31,10 @@ const COMMON_SEGMENTS = new Set([
 ]);
 
 export function normalisePartnerHostname(hostname: string): string {
-  return hostname.toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
+  return hostname
+    .toLowerCase()
+    .replace(/^www\./, '')
+    .replace(/\.$/, '');
 }
 
 export function isLikelyReferralUrl(url: URL): boolean {

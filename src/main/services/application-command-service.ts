@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { AppStateV1 } from '../../domain/app-state';
 import type { DailySiteMetrics } from '../../domain/entities/daily-metrics';
 import type { Site } from '../../domain/entities/site';
-import type { TaskCategory } from '../../domain/entities/task-category';
+import type { CheckinResultRecord, TaskCategory } from '../../domain/entities/task-category';
 import type {
   RecordSuccessResponse,
   SetHotkeysRequest,
@@ -239,6 +239,8 @@ export class ApplicationCommandService {
           if (!validSiteIds.has(siteId)) delete categoryRecord[siteId];
         }
       }
+
+      pruneCheckinRecords(draft);
     });
 
     return { categoryId: category.id, snapshot: toRendererSnapshot(state) };
@@ -258,9 +260,22 @@ export class ApplicationCommandService {
       for (const dailyRecord of Object.values(draft.taskDailyRecords)) {
         delete dailyRecord[categoryId];
       }
+
+      pruneCheckinRecords(draft);
     });
 
     return { snapshot: toRendererSnapshot(state) };
+  }
+
+  async recordCheckinResult(
+    date: string,
+    taskSiteId: string,
+    result: CheckinResultRecord,
+  ): Promise<void> {
+    await this.stateService.update((draft) => {
+      const day = (draft.checkinDailyRecords[date] ??= {});
+      day[taskSiteId] = result;
+    });
   }
 
   async setTaskCompletion(date: string, item: TaskCompletionItem): Promise<SnapshotResponse> {
@@ -307,6 +322,20 @@ function requireSite(state: AppStateV1, siteId: string): Site {
     });
   }
   return site;
+}
+
+function pruneCheckinRecords(state: AppStateV1): void {
+  const validSiteIds = new Set<string>();
+  for (const category of state.taskCategories) {
+    for (const site of category.sites) validSiteIds.add(site.id);
+  }
+
+  for (const [date, dayRecord] of Object.entries(state.checkinDailyRecords)) {
+    for (const siteId of Object.keys(dayRecord)) {
+      if (!validSiteIds.has(siteId)) delete dayRecord[siteId];
+    }
+    if (Object.keys(dayRecord).length === 0) delete state.checkinDailyRecords[date];
+  }
 }
 
 function getOrCreateMetrics(state: AppStateV1, date: string, siteId: string): DailySiteMetrics {

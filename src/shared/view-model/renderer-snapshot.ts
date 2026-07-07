@@ -51,10 +51,17 @@ export interface RendererSettings {
 export type RendererTaskColour =
   'teal' | 'purple' | 'green' | 'gold' | 'orange' | 'red' | 'blue' | 'pink';
 
+export interface RendererTaskSiteCheckin {
+  enabled: boolean;
+  loginPath?: string | undefined;
+  checkinPath?: string | undefined;
+}
+
 export interface RendererTaskSite {
   id: string;
   name: string;
   url: string;
+  checkin?: RendererTaskSiteCheckin | undefined;
 }
 
 export interface RendererTaskCategory {
@@ -65,6 +72,16 @@ export interface RendererTaskCategory {
 }
 
 export type RendererTaskDailyState = Record<string, Record<string, Record<string, boolean>>>;
+
+export type RendererCheckinStatus = 'success' | 'failed' | 'skipped';
+
+export interface RendererCheckinResult {
+  status: RendererCheckinStatus;
+  at: string;
+  message?: string | undefined;
+}
+
+export type RendererCheckinDailyState = Record<string, Record<string, RendererCheckinResult>>;
 
 /**
  * Transitional renderer read model. It preserves the current JavaScript UI's
@@ -82,4 +99,5 @@ export interface RendererSnapshot {
     categories: RendererTaskCategory[];
   };
   tasksDailyState: RendererTaskDailyState;
+  checkinDailyState: RendererCheckinDailyState;
 }

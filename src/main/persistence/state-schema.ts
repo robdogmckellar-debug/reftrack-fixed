@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { APP_STATE_SCHEMA_VERSION, type AppStateV1 } from '../../domain/app-state';
 import { isValidIsoDate, isValidIsoTimestamp } from '../../shared/date/iso-date';
 import { TASK_COLOURS } from '../../domain/entities/task-category';
+import { DEFAULT_CHECKIN_SETTINGS } from '../../domain/entities/settings';
 import { isValidHotkeyKey } from '../../shared/hotkeys/bindings';
 
 const EntityIdSchema = z.string().trim().min(1).max(160);
@@ -42,11 +43,43 @@ const ActivityEntrySchema = z
   })
   .strict();
 
+const OptionalPathSchema = z.string().max(2048).optional();
+
+const TaskSiteCheckinSchema = z
+  .object({
+    enabled: z.boolean(),
+    loginPath: OptionalPathSchema,
+    checkinPath: OptionalPathSchema,
+  })
+  .strict();
+
 const TaskSiteSchema = z
   .object({
     id: EntityIdSchema,
     name: z.string().trim().min(1).max(100),
     url: z.string().max(2048),
+    checkin: TaskSiteCheckinSchema.optional(),
+  })
+  .strict();
+
+const CheckinSettingsSchema = z
+  .object({
+    loginPath: z.string().max(2048),
+    checkinPath: z.string().max(2048),
+    usernameSelector: z.string().max(1000),
+    passwordSelector: z.string().max(1000),
+    submitSelector: z.string().max(1000),
+    checkinButtonSelector: z.string().max(1000),
+    dismissSelector: z.string().max(1000),
+    successSelector: z.string().max(1000),
+  })
+  .strict();
+
+const CheckinResultRecordSchema = z
+  .object({
+    status: z.enum(['success', 'failed', 'skipped']),
+    at: IsoTimestampSchema,
+    message: z.string().max(500).optional(),
   })
   .strict();
 
@@ -72,7 +105,7 @@ const TaskCategorySchema = z
     });
   });
 
-export const AppStateV1Schema: z.ZodType<AppStateV1> = z
+export const AppStateV1Schema = z
   .object({
     schemaVersion: z.literal(APP_STATE_SCHEMA_VERSION),
     revision: NonNegativeSafeIntegerSchema,
@@ -88,6 +121,7 @@ export const AppStateV1Schema: z.ZodType<AppStateV1> = z
             folderPath: z.string().max(32767).nullable(),
           })
           .strict(),
+        checkin: CheckinSettingsSchema.default({ ...DEFAULT_CHECKIN_SETTINGS }),
         hotkeys: z
           .object({
             enabled: z.boolean(),
@@ -116,6 +150,9 @@ export const AppStateV1Schema: z.ZodType<AppStateV1> = z
       IsoDateSchema,
       z.record(EntityIdSchema, z.record(EntityIdSchema, z.boolean())),
     ),
+    checkinDailyRecords: z
+      .record(IsoDateSchema, z.record(EntityIdSchema, CheckinResultRecordSchema))
+      .default({}),
   })
   .strict()
   .superRefine((state, context) => {

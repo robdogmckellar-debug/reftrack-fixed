@@ -70,6 +70,7 @@ export function toRendererSnapshot(state: AppStateV1): RendererSnapshot {
       categories: structuredClone(state.taskCategories),
     },
     tasksDailyState: structuredClone(state.taskDailyRecords),
+    checkinDailyState: structuredClone(state.checkinDailyRecords),
   };
 }
 

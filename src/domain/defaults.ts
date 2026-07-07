@@ -102,6 +102,7 @@ const DEFAULT_STATE: AppStateV1 = {
     imageCleaner: {
       enabled: false,
       folderPath: null,
+      hotkey: null,
     },
   },
   taskCategories: [],

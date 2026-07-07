@@ -58,6 +58,7 @@ export function toRendererSnapshot(state: AppStateV1): RendererSnapshot {
       darkMode: state.settings.darkMode,
       folderClearEnabled: state.settings.imageCleaner.enabled,
       folderClearPath: state.settings.imageCleaner.folderPath,
+      folderClearHotkey: state.settings.imageCleaner.hotkey,
     },
     tasks: {
       categories: structuredClone(state.taskCategories),

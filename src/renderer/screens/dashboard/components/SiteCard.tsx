@@ -2,6 +2,7 @@ import type { JSX } from 'preact';
 
 import { CheckIcon, ClipboardIcon, ExternalLinkIcon, SuccessIcon } from '../../../components/icons';
 import { Button } from '../../../design-system/Button';
+import { formatCurrency } from '../../../lib/format';
 import {
   dailySignalFor,
   pendingCopySiteIds,
@@ -15,15 +16,6 @@ interface SiteCardProps {
   onCopy(siteId: string): void;
   onSuccess(siteId: string): void;
   onOpen(url: string): void;
-}
-
-function formatMoney(value: number): string {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'AUD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
 }
 
 export function SiteCard({ siteId, onCopy, onSuccess, onOpen }: SiteCardProps): JSX.Element | null {
@@ -105,7 +97,7 @@ export function SiteCard({ siteId, onCopy, onSuccess, onOpen }: SiteCardProps): 
         </div>
         <div class="dashboard-site-card__earnings">
           <dt>Total earnings</dt>
-          <dd>{formatMoney(site.earnings)}</dd>
+          <dd>{formatCurrency(site.earnings)}</dd>
         </div>
       </dl>
 
@@ -153,7 +145,7 @@ export function SiteCard({ siteId, onCopy, onSuccess, onOpen }: SiteCardProps): 
           leadingIcon={<SuccessIcon size={16} />}
           onClick={() => onSuccess(site.id)}
         >
-          Record {formatMoney(site.bonus)}
+          Record {formatCurrency(site.bonus)}
         </Button>
       </div>
     </article>

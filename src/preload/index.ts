@@ -30,6 +30,8 @@ const reftrackApi: RefTrackApi = {
       ipcRenderer.invoke(IPC_CHANNELS.settingsSetImageCleanerEnabled, request),
     selectImageCleanerFolder: () =>
       ipcRenderer.invoke(IPC_CHANNELS.settingsSelectImageCleanerFolder),
+    setImageCleanerHotkey: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.settingsSetImageCleanerHotkey, request),
   },
   imageCleaner: {
     run: () => ipcRenderer.invoke(IPC_CHANNELS.imageCleanerRun),

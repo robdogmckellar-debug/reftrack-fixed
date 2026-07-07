@@ -104,6 +104,10 @@ export interface SetImageCleanerEnabledRequest {
   enabled: boolean;
 }
 
+export interface SetImageCleanerHotkeyRequest {
+  hotkey: string | null;
+}
+
 export interface SelectImageCleanerFolderResponse extends SnapshotResponse {
   selected: boolean;
   folderPath: string | null;
@@ -237,6 +241,9 @@ export interface RefTrackApi {
       request: SetImageCleanerEnabledRequest,
     ): Promise<IpcResult<SnapshotResponse>>;
     selectImageCleanerFolder(): Promise<IpcResult<SelectImageCleanerFolderResponse>>;
+    setImageCleanerHotkey(
+      request: SetImageCleanerHotkeyRequest,
+    ): Promise<IpcResult<SnapshotResponse>>;
   };
   imageCleaner: {
     run(): Promise<IpcResult<ImageCleanupStart>>;

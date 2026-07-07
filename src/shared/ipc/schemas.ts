@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { isValidIsoDate } from '../date/iso-date';
+import { isValidHotkeyKey } from '../hotkeys/bindings';
 
 export const EmptyRequestSchema = z.undefined();
 
@@ -56,6 +57,27 @@ export const UndoSuccessRequestSchema = z
   .strict();
 
 export const SetImageCleanerEnabledRequestSchema = z.object({ enabled: z.boolean() }).strict();
+
+export const SetHotkeysRequestSchema = z
+  .object({
+    enabled: z.boolean(),
+    bindings: z
+      .array(
+        z
+          .object({
+            siteId: EntityIdSchema,
+            key: z
+              .string()
+              .refine(
+                (value) => value === '' || isValidHotkeyKey(value),
+                'Expected a supported hotkey key',
+              ),
+          })
+          .strict(),
+      )
+      .max(1000),
+  })
+  .strict();
 
 const TaskSiteSchema = z
   .object({

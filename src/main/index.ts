@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { app, session } from 'electron';
+import { app, globalShortcut, session } from 'electron';
 import type { BrowserWindow } from 'electron';
 
 import { createPerformanceBaseline } from './performance-baseline';
@@ -14,6 +14,7 @@ import { APP_ID, MAIN_SESSION_PARTITION } from './application/constants';
 import { createMainWindow } from './application/create-main-window';
 import { configureMainSession } from './application/security-policy';
 import { acquireSingleInstanceLock } from './application/single-instance';
+import { HotkeyService } from './services/hotkey-service';
 import { StateService } from './services/state-service';
 
 registerApplicationScheme();
@@ -22,6 +23,7 @@ const performanceBaseline = createPerformanceBaseline({ app });
 const development = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
 let ipcRegistration: IpcHandlerRegistration | null = null;
+let hotkeyService: HotkeyService | null = null;
 
 async function startApplication(): Promise<void> {
   performanceBaseline.mark('appReadyMs');
@@ -40,9 +42,18 @@ async function startApplication(): Promise<void> {
     );
   }
 
+  hotkeyService = new HotkeyService({
+    globalShortcut: {
+      register: (accelerator, callback) => globalShortcut.register(accelerator, callback),
+      unregister: (accelerator) => globalShortcut.unregister(accelerator),
+    },
+    getMainWindow: () => mainWindow,
+  });
+
   ipcRegistration = registerIpcHandlers({
     getMainWindow: () => mainWindow,
     stateService,
+    hotkeyService,
     development,
     importerWorkerPath: path.join(__dirname, 'importer-worker.js'),
     ...(process.env.ELECTRON_RENDERER_URL
@@ -63,6 +74,8 @@ async function startApplication(): Promise<void> {
   mainWindow.once('closed', () => {
     mainWindow = null;
   });
+
+  hotkeyService.sync(stateService.getSnapshot());
 }
 
 if (!acquireSingleInstanceLock(app, () => mainWindow)) {
@@ -79,6 +92,12 @@ if (!acquireSingleInstanceLock(app, () => mainWindow)) {
   app.on('before-quit', () => {
     ipcRegistration?.dispose();
     ipcRegistration = null;
+    hotkeyService?.dispose();
+    hotkeyService = null;
+  });
+
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
   });
 
   app.on('window-all-closed', () => {

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { APP_STATE_SCHEMA_VERSION, type AppStateV1 } from '../../domain/app-state';
 import { isValidIsoDate, isValidIsoTimestamp } from '../../shared/date/iso-date';
 import { TASK_COLOURS } from '../../domain/entities/task-category';
+import { isValidHotkeyKey } from '../../shared/hotkeys/bindings';
 
 const EntityIdSchema = z.string().trim().min(1).max(160);
 const NonNegativeSafeIntegerSchema = z.number().int().nonnegative().safe();
@@ -87,6 +88,27 @@ export const AppStateV1Schema: z.ZodType<AppStateV1> = z
             folderPath: z.string().max(32767).nullable(),
           })
           .strict(),
+        hotkeys: z
+          .object({
+            enabled: z.boolean(),
+            bindings: z
+              .array(
+                z
+                  .object({
+                    siteId: EntityIdSchema,
+                    key: z
+                      .string()
+                      .refine(
+                        (value) => value === '' || isValidHotkeyKey(value),
+                        'Expected a supported hotkey key',
+                      ),
+                  })
+                  .strict(),
+              )
+              .max(1000),
+          })
+          .strict()
+          .default({ enabled: true, bindings: [] }),
       })
       .strict(),
     taskCategories: z.array(TaskCategorySchema).max(500),

@@ -103,6 +103,10 @@ const DEFAULT_STATE: AppStateV1 = {
       enabled: false,
       folderPath: null,
     },
+    hotkeys: {
+      enabled: true,
+      bindings: [],
+    },
   },
   taskCategories: [],
   taskDailyRecords: {},

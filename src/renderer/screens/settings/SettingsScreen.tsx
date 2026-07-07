@@ -2,11 +2,14 @@ import type { JSX } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 
 import type { ApplicationInfo, ImageCleanupCompletedEvent } from '../../../shared/ipc/contract';
+import type { RendererHotkeySettings } from '../../../shared/view-model/renderer-snapshot';
+import { resolveHotkeyBindings } from '../../../shared/hotkeys/bindings';
 import { publishSnapshot, rendererSnapshot } from '../../app/store';
 import {
   DatabaseIcon,
   FolderIcon,
   InfoIcon,
+  KeyboardIcon,
   LinkIcon,
   SettingsIcon,
   ShieldIcon,
@@ -239,6 +242,185 @@ function ApplicationInformation({
   );
 }
 
+function normaliseCapturedKey(event: JSX.TargetedKeyboardEvent<HTMLButtonElement>): string | null {
+  if (/^F([1-9]|1[0-2])$/.test(event.key)) return event.key;
+  if (/^[0-9]$/.test(event.key)) return event.key;
+  if (/^Numpad[0-9]$/.test(event.code)) return event.code.slice(-1);
+  return null;
+}
+
+function HotkeysPanel(): JSX.Element {
+  const snapshot = rendererSnapshot.value;
+  const sites = useMemo(() => snapshot?.sites ?? [], [snapshot]);
+  const hotkeys = useMemo<RendererHotkeySettings>(
+    () => snapshot?.settings.hotkeys ?? { enabled: true, bindings: [] },
+    [snapshot],
+  );
+  const [pending, setPending] = useState(false);
+  const [capturingSiteId, setCapturingSiteId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const effective = useMemo(
+    () => resolveHotkeyBindings(
+      sites.map((site) => site.id),
+      hotkeys,
+    ),
+    [sites, hotkeys],
+  );
+
+  const save = async (next: RendererHotkeySettings): Promise<void> => {
+    setPending(true);
+    setError(null);
+    try {
+      const response = unwrapIpcResult(await window.reftrack.settings.setHotkeys(next));
+      publishSnapshot(response.snapshot);
+    } catch (saveError) {
+      setError(errorMessage(saveError, 'The hotkey settings could not be saved.'));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const assignKey = (siteId: string, key: string): void => {
+    const bindings = hotkeys.bindings.filter(
+      (binding) => binding.siteId !== siteId && !(key !== '' && binding.key === key),
+    );
+    bindings.push({ siteId, key });
+    void save({ enabled: hotkeys.enabled, bindings });
+  };
+
+  const resetSite = (siteId: string): void => {
+    void save({
+      enabled: hotkeys.enabled,
+      bindings: hotkeys.bindings.filter((binding) => binding.siteId !== siteId),
+    });
+  };
+
+  const handleCaptureKeyDown = (
+    siteId: string,
+    event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
+  ): void => {
+    event.preventDefault();
+    if (event.key === 'Escape' || event.key === 'Tab') {
+      setCapturingSiteId(null);
+      return;
+    }
+    if (event.key === 'Backspace' || event.key === 'Delete') {
+      setCapturingSiteId(null);
+      assignKey(siteId, '');
+      return;
+    }
+    const key = normaliseCapturedKey(event);
+    if (!key) return;
+    setCapturingSiteId(null);
+    assignKey(siteId, key);
+  };
+
+  return (
+    <section class="settings-panel settings-panel--hotkeys" aria-labelledby="hotkeys-title">
+      <header class="settings-panel__header">
+        <span class="settings-panel__icon settings-panel__icon--blue" aria-hidden="true">
+          <KeyboardIcon size={20} />
+        </span>
+        <div>
+          <span class="settings-eyebrow">Keyboard</span>
+          <h2 id="hotkeys-title">Copy hotkeys</h2>
+          <p>
+            Assign a key to each site to copy its referral link. Hotkeys work system-wide, even when
+            RefTrack is minimised.
+          </p>
+        </div>
+      </header>
+
+      {error ? (
+        <div class="settings-feedback settings-feedback--danger" role="alert">
+          <strong>Hotkeys were not updated</strong>
+          <span>{error}</span>
+        </div>
+      ) : null}
+
+      <div class="settings-control-card">
+        <ToggleSwitch
+          id="settings-hotkeys-enabled"
+          label="Enable copy hotkeys"
+          description="While enabled, the assigned keys are reserved for RefTrack across your whole computer."
+          checked={hotkeys.enabled}
+          pending={pending}
+          onChange={(checked) =>
+            void save({ enabled: checked, bindings: hotkeys.bindings })
+          }
+        />
+      </div>
+
+      {sites.length === 0 ? (
+        <p class="settings-hotkeys-empty">Add a site in Site Editor to assign a copy hotkey.</p>
+      ) : (
+        <ul class="settings-hotkeys-list" aria-label="Site copy hotkeys">
+          {sites.map((site) => {
+            const key = effective.get(site.id) ?? '';
+            const capturing = capturingSiteId === site.id;
+            const hasOverride = hotkeys.bindings.some((binding) => binding.siteId === site.id);
+            return (
+              <li key={site.id} class="settings-hotkeys-row">
+                <div class="settings-hotkeys-row__site">
+                  <strong>{site.name}</strong>
+                  {!site.url ? (
+                    <span class="settings-hotkeys-row__note">Needs a referral URL to copy</span>
+                  ) : null}
+                </div>
+                <span
+                  class={`settings-hotkeys-key${key ? '' : ' settings-hotkeys-key--off'}`}
+                  aria-label={key ? `Assigned key ${key}` : 'No key assigned'}
+                >
+                  {key || 'Off'}
+                </span>
+                <div class="settings-hotkeys-row__actions">
+                  <button
+                    type="button"
+                    class={`settings-hotkeys-rebind${capturing ? ' is-capturing' : ''}`}
+                    disabled={pending && !capturing}
+                    aria-pressed={capturing}
+                    onClick={() => setCapturingSiteId(capturing ? null : site.id)}
+                    onKeyDown={
+                      capturing ? (event) => handleCaptureKeyDown(site.id, event) : undefined
+                    }
+                    onBlur={() => capturing && setCapturingSiteId(null)}
+                  >
+                    {capturing ? 'Press a key…' : 'Change'}
+                  </button>
+                  {hasOverride ? (
+                    <button
+                      type="button"
+                      class="settings-hotkeys-clear"
+                      disabled={pending}
+                      onClick={() => resetSite(site.id)}
+                    >
+                      Reset
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {hotkeys.bindings.length > 0 ? (
+        <div class="settings-hotkeys-footer">
+          <Button
+            size="small"
+            variant="secondary"
+            pending={pending}
+            onClick={() => void save({ enabled: hotkeys.enabled, bindings: [] })}
+          >
+            Reset all to defaults
+          </Button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export function SettingsScreen({ active }: { active: boolean }): JSX.Element {
   const snapshot = rendererSnapshot.value;
   const enabled = snapshot?.settings.folderClearEnabled ?? false;
@@ -466,6 +648,8 @@ export function SettingsScreen({ active }: { active: boolean }): JSX.Element {
               </ul>
             </section>
           </section>
+
+          <HotkeysPanel />
 
           <section
             class="settings-panel settings-panel--recent"

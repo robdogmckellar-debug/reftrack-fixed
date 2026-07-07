@@ -31,10 +31,21 @@ export interface RendererActivityEntry {
   ts: number;
 }
 
+export interface RendererHotkeyBinding {
+  siteId: string;
+  key: string;
+}
+
+export interface RendererHotkeySettings {
+  enabled: boolean;
+  bindings: RendererHotkeyBinding[];
+}
+
 export interface RendererSettings {
   darkMode: boolean;
   folderClearEnabled: boolean;
   folderClearPath: string | null;
+  hotkeys: RendererHotkeySettings;
 }
 
 export type RendererTaskColour =

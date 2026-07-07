@@ -217,6 +217,10 @@
 .settings-folder-card,
 .settings-format-section,
 .settings-safety,
+.settings-panel--hotkeys > .settings-feedback,
+.settings-panel--hotkeys > .settings-hotkeys-list,
+.settings-panel--hotkeys > .settings-hotkeys-empty,
+.settings-panel--hotkeys > .settings-hotkeys-footer,
 .settings-panel--recent > .settings-empty-result,
 .settings-panel--recent > .settings-cleanup-result,
 .settings-panel--about > .settings-app-information,
@@ -792,4 +796,126 @@
   .settings-cleanup-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .settings-hotkeys-list,
+  .settings-hotkeys-empty,
+  .settings-hotkeys-footer {
+    margin-right: var(--space-3);
+    margin-left: var(--space-3);
+  }
+}
+
+.settings-hotkeys-empty {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-2);
+}
+
+.settings-hotkeys-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.settings-hotkeys-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-input);
+  padding: var(--space-3);
+}
+
+.settings-hotkeys-row__site {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-hotkeys-row__site strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-hotkeys-row__note {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-1);
+}
+
+.settings-hotkeys-key {
+  display: inline-flex;
+  min-width: 44px;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(75, 213, 237, 0.24);
+  border-radius: 8px;
+  background: var(--color-primary-soft);
+  padding: 0 var(--space-2);
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-1);
+  font-weight: 680;
+}
+
+.settings-hotkeys-key--off {
+  border-color: var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.settings-hotkeys-row__actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-hotkeys-rebind,
+.settings-hotkeys-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface-2);
+  padding: 0 var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-1);
+  font-weight: 620;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--easing-standard),
+    border-color var(--duration-fast) var(--easing-standard),
+    color var(--duration-fast) var(--easing-standard);
+}
+
+.settings-hotkeys-rebind:hover:not(:disabled),
+.settings-hotkeys-clear:hover:not(:disabled) {
+  border-color: rgba(182, 194, 208, 0.28);
+  color: var(--color-text);
+}
+
+.settings-hotkeys-rebind.is-capturing {
+  border-color: rgba(75, 213, 237, 0.5);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.settings-hotkeys-rebind:disabled,
+.settings-hotkeys-clear:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.settings-hotkeys-footer {
+  display: flex;
+  justify-content: flex-end;
 }

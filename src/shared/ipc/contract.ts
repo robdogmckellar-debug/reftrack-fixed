@@ -239,6 +239,7 @@ export interface RefTrackApi {
     selectImageCleanerFolder(): Promise<IpcResult<SelectImageCleanerFolderResponse>>;
   };
   imageCleaner: {
+    run(): Promise<IpcResult<ImageCleanupStart>>;
     onCompleted(listener: (event: ImageCleanupCompletedEvent) => void): () => void;
   };
   tasks: {

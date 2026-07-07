@@ -10,6 +10,7 @@ import {
   LinkIcon,
   SettingsIcon,
   ShieldIcon,
+  TrashIcon,
 } from '../../components/icons';
 import { Button } from '../../design-system/Button';
 import { ToggleSwitch } from '../../design-system/ToggleSwitch';
@@ -247,6 +248,7 @@ export function SettingsScreen({ active }: { active: boolean }): JSX.Element {
   const [pending, setPending] = useState<PendingAction>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [lastCleanup, setLastCleanup] = useState<ImageCleanupCompletedEvent | null>(null);
+  const [cleanupRunning, setCleanupRunning] = useState(false);
   const [appInfo, setAppInfo] = useState<ApplicationInfo | null>(null);
   const [appInfoLoading, setAppInfoLoading] = useState(false);
   const [appInfoFailure, setAppInfoFailure] = useState<string | null>(null);
@@ -255,6 +257,7 @@ export function SettingsScreen({ active }: { active: boolean }): JSX.Element {
     () =>
       window.reftrack.imageCleaner.onCompleted((event) => {
         setLastCleanup(event);
+        setCleanupRunning(false);
       }),
     [],
   );
@@ -329,6 +332,45 @@ export function SettingsScreen({ active }: { active: boolean }): JSX.Element {
       });
     } finally {
       setPending(null);
+    }
+  };
+
+  const runCleanupNow = async (): Promise<void> => {
+    if (pending || cleanupRunning) return;
+    setFeedback(null);
+    setCleanupRunning(true);
+    try {
+      const outcome = unwrapIpcResult(await window.reftrack.imageCleaner.run());
+      if (outcome.status === 'started') {
+        setFeedback({
+          tone: 'info',
+          title: 'Cleanup started',
+          message: 'Verified top-level images are moving to the Recycle Bin.',
+        });
+        return;
+      }
+      if (outcome.status === 'busy') {
+        setFeedback({
+          tone: 'info',
+          title: 'Cleanup already running',
+          message: 'An existing cleanup is finishing in the background.',
+        });
+        return;
+      }
+
+      setCleanupRunning(false);
+      setFeedback({
+        tone: 'info',
+        title: 'Choose a folder first',
+        message: 'Select a dedicated folder before running cleanup.',
+      });
+    } catch (error) {
+      setCleanupRunning(false);
+      setFeedback({
+        tone: 'danger',
+        title: 'Cleanup could not start',
+        message: errorMessage(error, 'RefTrack could not start image cleanup.'),
+      });
     }
   };
 
@@ -429,6 +471,24 @@ export function SettingsScreen({ active }: { active: boolean }): JSX.Element {
               >
                 {folderPath ? 'Change folder' : 'Choose folder'}
               </Button>
+            </div>
+
+            <div class="settings-manual-run">
+              <Button
+                size="small"
+                variant="primary"
+                pending={cleanupRunning}
+                disabled={!folderPath || pending !== null}
+                leadingIcon={<TrashIcon size={15} />}
+                onClick={() => void runCleanupNow()}
+              >
+                Run cleanup now
+              </Button>
+              <span class="settings-manual-run__hint">
+                {folderPath
+                  ? 'Clear verified images from the folder now, without a Copy Link — handy once the day’s copies are done.'
+                  : 'Choose a folder above to enable manual cleanup.'}
+              </span>
             </div>
 
             <div class="settings-format-section">

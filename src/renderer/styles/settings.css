@@ -215,6 +215,7 @@
 
 .settings-control-card,
 .settings-folder-card,
+.settings-manual-run,
 .settings-format-section,
 .settings-safety,
 .settings-panel--recent > .settings-empty-result,
@@ -223,6 +224,20 @@
 .settings-panel--about > .settings-app-info-loading,
 .settings-panel--about > .settings-app-info-error {
   margin: var(--space-4) var(--space-5) 0;
+}
+
+.settings-manual-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.settings-manual-run__hint {
+  flex: 1 1 220px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-1);
+  line-height: 1.45;
 }
 
 .settings-panel > :last-child {

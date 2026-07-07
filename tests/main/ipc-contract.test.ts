@@ -19,6 +19,7 @@ describe('typed IPC contract', () => {
     expect(channels).not.toContain('load-data');
     expect(channels).not.toContain('image-cleaner:clear-legacy');
     expect(channels).toContain('image-cleaner:completed');
+    expect(channels).toContain('image-cleaner:run');
   });
 
   it('strictly rejects unknown or malformed command payloads', () => {

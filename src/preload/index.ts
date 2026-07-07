@@ -32,6 +32,7 @@ const reftrackApi: RefTrackApi = {
       ipcRenderer.invoke(IPC_CHANNELS.settingsSelectImageCleanerFolder),
   },
   imageCleaner: {
+    run: () => ipcRenderer.invoke(IPC_CHANNELS.imageCleanerRun),
     onCompleted: (listener) => {
       const wrapped = (
         _event: Electron.IpcRendererEvent,

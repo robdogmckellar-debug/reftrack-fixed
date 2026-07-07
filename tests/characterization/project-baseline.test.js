@@ -9,17 +9,17 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 
 describe('reproducible project baseline', () => {
   it('pins the approved runtime, build, TypeScript and renderer dependencies exactly', () => {
-    expect(packageJson.devDependencies.electron).toBe('42.5.1');
+    expect(packageJson.devDependencies.electron).toBe('43.0.0');
     expect(packageJson.devDependencies['electron-builder']).toBe('26.15.3');
     expect(packageJson.devDependencies['electron-vite']).toBe('5.0.0');
     expect(packageJson.devDependencies.vite).toBe('7.3.6');
     expect(packageJson.devDependencies.typescript).toBe('6.0.3');
-    expect(packageJson.dependencies.preact).toBe('10.29.3');
-    expect(packageJson.dependencies['@preact/signals']).toBe('2.9.2');
+    expect(packageJson.dependencies.preact).toBe('10.29.5');
+    expect(packageJson.dependencies['@preact/signals']).toBe('2.9.3');
     expect(packageJson.dependencies.zod).toBe('4.4.3');
     expect(packageJson.dependencies.parse5).toBe('8.0.1');
-    expect(packageJson.devDependencies['@electron/fuses']).toBe('1.8.0');
-    expect(packageJson.devDependencies['@electron/asar']).toBe('3.4.1');
+    expect(packageJson.devDependencies['@electron/fuses']).toBe('2.1.3');
+    expect(packageJson.devDependencies['@electron/asar']).toBe('4.2.0');
     expect(packageJson.devDependencies['@playwright/test']).toBe('1.61.1');
     expect(packageJson.devDependencies['@axe-core/playwright']).toBe('4.12.1');
   });

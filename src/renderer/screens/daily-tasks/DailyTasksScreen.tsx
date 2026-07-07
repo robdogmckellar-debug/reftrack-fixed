@@ -91,9 +91,7 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
   useEffect(() => {
     const offProgress = window.reftrack.checkin.onProgress((event) => {
       setCheckinStatus(
-        event.total > 1
-          ? `(${event.index}/${event.total}) ${event.message}`
-          : event.message,
+        event.total > 1 ? `(${event.index}/${event.total}) ${event.message}` : event.message,
       );
     });
     const offCompleted = window.reftrack.checkin.onCompleted((event) => {

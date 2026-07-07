@@ -16,7 +16,12 @@ import {
   TrashIcon,
 } from '../../../components/icons';
 import { Button } from '../../../design-system/Button';
-import { categoryProgress, categoryStatus, checkinDailyResult, taskSiteDone } from '../daily-tasks-model';
+import {
+  categoryProgress,
+  categoryStatus,
+  checkinDailyResult,
+  taskSiteDone,
+} from '../daily-tasks-model';
 
 interface TaskCategoryCardProps {
   category: RendererTaskCategory;

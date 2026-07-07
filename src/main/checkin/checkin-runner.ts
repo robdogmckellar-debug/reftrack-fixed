@@ -3,11 +3,7 @@ import type { OnBeforeRequestListenerDetails, Session } from 'electron';
 
 import { ApplicationError } from '../services/application-error';
 import { buildClickScript, buildExistsScript, buildFillLoginScript } from './checkin-scripts';
-import type {
-  ClickResult,
-  ExistsResult,
-  FillLoginResult,
-} from './checkin-scripts';
+import type { ClickResult, ExistsResult, FillLoginResult } from './checkin-scripts';
 import type { CheckinRunOutcome, CheckinRunnerContext } from './types';
 
 const NAVIGATION_TIMEOUT_MS = 20_000;

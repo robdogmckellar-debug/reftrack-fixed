@@ -123,8 +123,7 @@ export function TaskCategoryDialog({
       current.map((site) => {
         if (site.id !== siteId) return site;
         if (enabled) return { ...site, checkin: { enabled: true } };
-        const { checkin: _removed, ...rest } = site;
-        return rest;
+        return { id: site.id, name: site.name, url: site.url };
       }),
     );
   };
@@ -161,9 +160,7 @@ export function TaskCategoryDialog({
           );
         }
       } else if (savedCredentialIds.has(site.id)) {
-        unwrapIpcResult(
-          await window.reftrack.checkin.deleteCredentials({ taskSiteId: site.id }),
-        );
+        unwrapIpcResult(await window.reftrack.checkin.deleteCredentials({ taskSiteId: site.id }));
       }
     }
   };
@@ -392,7 +389,9 @@ export function TaskCategoryDialog({
                             maxLength={4096}
                             autoComplete="off"
                             spellcheck={false}
-                            placeholder={hasSavedCredentials ? 'Saved — leave blank to keep' : 'Username'}
+                            placeholder={
+                              hasSavedCredentials ? 'Saved — leave blank to keep' : 'Username'
+                            }
                             aria-invalid={submitted && Boolean(credentialErrors[site.id])}
                             onInput={(event) =>
                               updateCredential(site.id, 'username', event.currentTarget.value)
@@ -407,7 +406,9 @@ export function TaskCategoryDialog({
                             value={draft?.password ?? ''}
                             maxLength={4096}
                             autoComplete="off"
-                            placeholder={hasSavedCredentials ? 'Saved — leave blank to keep' : 'Password'}
+                            placeholder={
+                              hasSavedCredentials ? 'Saved — leave blank to keep' : 'Password'
+                            }
                             aria-invalid={submitted && Boolean(credentialErrors[site.id])}
                             aria-describedby={
                               submitted && credentialErrors[site.id] ? credentialErrorId : undefined

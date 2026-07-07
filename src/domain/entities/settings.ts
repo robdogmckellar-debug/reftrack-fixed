@@ -29,7 +29,8 @@ export interface AppSettings {
 export const DEFAULT_CHECKIN_SETTINGS: CheckinSettings = {
   loginPath: '/login',
   checkinPath: '/daily-checkin',
-  usernameSelector: 'form input[type="text"], form input[type="email"], form input[name="username"]',
+  usernameSelector:
+    'form input[type="text"], form input[type="email"], form input[name="username"]',
   passwordSelector: 'form input[type="password"]',
   submitSelector: 'form a.btn.login, form .btn.login, form .login',
   checkinButtonSelector:

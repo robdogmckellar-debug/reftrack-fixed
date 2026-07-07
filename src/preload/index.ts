@@ -81,8 +81,7 @@ const reftrackApi: RefTrackApi = {
   checkin: {
     start: (request) => ipcRenderer.invoke(IPC_CHANNELS.checkinStart, request),
     cancel: (request) => ipcRenderer.invoke(IPC_CHANNELS.checkinCancel, request),
-    saveCredentials: (request) =>
-      ipcRenderer.invoke(IPC_CHANNELS.checkinSaveCredentials, request),
+    saveCredentials: (request) => ipcRenderer.invoke(IPC_CHANNELS.checkinSaveCredentials, request),
     deleteCredentials: (request) =>
       ipcRenderer.invoke(IPC_CHANNELS.checkinDeleteCredentials, request),
     credentialStatus: () => ipcRenderer.invoke(IPC_CHANNELS.checkinCredentialStatus),
@@ -94,10 +93,7 @@ const reftrackApi: RefTrackApi = {
       return () => ipcRenderer.removeListener(IPC_CHANNELS.checkinProgress, wrapped);
     },
     onCompleted: (listener) => {
-      const wrapped = (
-        _event: Electron.IpcRendererEvent,
-        payload: CheckinCompletedEvent,
-      ): void => {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: CheckinCompletedEvent): void => {
         listener(payload);
       };
       ipcRenderer.on(IPC_CHANNELS.checkinCompleted, wrapped);

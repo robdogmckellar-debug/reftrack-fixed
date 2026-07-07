@@ -240,7 +240,15 @@ export class CheckinCoordinator {
       status: outcome.status,
       message: outcome.message,
     });
-    this.emitProgress(run, target, position, total, 'site-complete', outcome.status, outcome.message);
+    this.emitProgress(
+      run,
+      target,
+      position,
+      total,
+      'site-complete',
+      outcome.status,
+      outcome.message,
+    );
   }
 
   private emitProgress(

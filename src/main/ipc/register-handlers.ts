@@ -117,9 +117,7 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
 
   const pruneCheckinCredentials = async (): Promise<void> => {
     const state = options.stateService.getSnapshot();
-    const ids = state.taskCategories.flatMap((category) =>
-      category.sites.map((site) => site.id),
-    );
+    const ids = state.taskCategories.flatMap((category) => category.sites.map((site) => site.id));
     await credentialStore.pruneExcept(ids);
   };
   const senderOptions = {

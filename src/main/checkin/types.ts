@@ -3,11 +3,7 @@ import type { BrowserWindow } from 'electron';
 import type { CredentialSecrets } from './credential-store';
 
 export type CheckinStage =
-  | 'starting'
-  | 'logging-in'
-  | 'dismissing-popup'
-  | 'checking-in'
-  | 'verifying';
+  'starting' | 'logging-in' | 'dismissing-popup' | 'checking-in' | 'verifying';
 
 export interface CheckinSelectors {
   usernameSelector: string;

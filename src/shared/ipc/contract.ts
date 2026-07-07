@@ -244,12 +244,7 @@ export interface CheckinCredentialStatusResponse {
 }
 
 export type CheckinProgressStage =
-  | 'starting'
-  | 'logging-in'
-  | 'dismissing-popup'
-  | 'checking-in'
-  | 'verifying'
-  | 'site-complete';
+  'starting' | 'logging-in' | 'dismissing-popup' | 'checking-in' | 'verifying' | 'site-complete';
 
 export interface CheckinProgressEvent {
   runId: string;

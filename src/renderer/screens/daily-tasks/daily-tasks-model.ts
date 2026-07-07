@@ -194,8 +194,7 @@ export function categoryHasCheckin(category: RendererTaskCategory): boolean {
 
 export function countCheckinSites(categories: readonly RendererTaskCategory[]): number {
   return categories.reduce(
-    (total, category) =>
-      total + category.sites.filter((site) => site.checkin?.enabled).length,
+    (total, category) => total + category.sites.filter((site) => site.checkin?.enabled).length,
     0,
   );
 }

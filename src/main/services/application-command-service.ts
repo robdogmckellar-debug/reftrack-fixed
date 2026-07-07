@@ -5,6 +5,7 @@ import type { DailySiteMetrics } from '../../domain/entities/daily-metrics';
 import type { Site } from '../../domain/entities/site';
 import type { TaskCategory } from '../../domain/entities/task-category';
 import type {
+  BootstrapResponse,
   RecordSuccessResponse,
   SiteUpsertRequest,
   SiteUpsertResponse,
@@ -20,8 +21,11 @@ import { ApplicationError } from './application-error';
 export class ApplicationCommandService {
   constructor(private readonly stateService: StateService) {}
 
-  bootstrap(): SnapshotResponse {
-    return { snapshot: this.getRendererSnapshot() };
+  bootstrap(): BootstrapResponse {
+    return {
+      snapshot: this.getRendererSnapshot(),
+      storage: this.stateService.getStorageStatus(),
+    };
   }
 
   async upsertSite(request: SiteUpsertRequest): Promise<SiteUpsertResponse> {

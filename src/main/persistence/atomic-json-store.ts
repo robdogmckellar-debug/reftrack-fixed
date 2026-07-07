@@ -9,12 +9,15 @@ export interface StateLoadResult<T> {
   state: T;
   source: StateLoadSource;
   recovered: boolean;
+  archivedPath: string | null;
 }
 
 export interface AtomicJsonStoreOptions<T> {
   filePath: string;
   parse(value: unknown): T;
   createDefault(): T;
+  /** Upgrade a parsed-but-unvalidated document before strict validation. */
+  migrate?(value: unknown): unknown;
   now?: () => Date;
 }
 
@@ -30,6 +33,7 @@ export class AtomicJsonStore<T> {
 
   private readonly parse: (value: unknown) => T;
   private readonly createDefault: () => T;
+  private readonly migrate: ((value: unknown) => unknown) | undefined;
   private readonly now: () => Date;
 
   constructor(options: AtomicJsonStoreOptions<T>) {
@@ -37,6 +41,7 @@ export class AtomicJsonStore<T> {
     this.backupPath = `${options.filePath}.backup`;
     this.parse = options.parse;
     this.createDefault = options.createDefault;
+    this.migrate = options.migrate;
     this.now = options.now ?? (() => new Date());
   }
 
@@ -45,18 +50,18 @@ export class AtomicJsonStore<T> {
 
     const primary = await this.readValidated(this.filePath);
     if (primary.state !== null) {
-      return { state: primary.state, source: 'primary', recovered: false };
+      return { state: primary.state, source: 'primary', recovered: false, archivedPath: null };
     }
 
     const backup = await this.readValidated(this.backupPath);
     if (backup.state !== null) {
-      if (primary.exists) await this.archiveCorruptFile(this.filePath);
+      const archivedPath = primary.exists ? await this.archiveCorruptFile(this.filePath) : null;
       await this.writeAtomic(this.filePath, backup.state);
-      return { state: backup.state, source: 'backup', recovered: true };
+      return { state: backup.state, source: 'backup', recovered: true, archivedPath };
     }
 
-    if (primary.exists) await this.archiveCorruptFile(this.filePath);
-    if (backup.exists) await this.archiveCorruptFile(this.backupPath);
+    const archivedPrimary = primary.exists ? await this.archiveCorruptFile(this.filePath) : null;
+    const archivedBackup = backup.exists ? await this.archiveCorruptFile(this.backupPath) : null;
 
     const state = this.parse(this.createDefault());
     await this.writeAtomic(this.filePath, state);
@@ -65,6 +70,7 @@ export class AtomicJsonStore<T> {
       state,
       source: 'default',
       recovered: primary.exists || backup.exists,
+      archivedPath: archivedPrimary ?? archivedBackup,
     };
   }
 
@@ -78,16 +84,29 @@ export class AtomicJsonStore<T> {
   }
 
   private async readValidated(filePath: string): Promise<ValidatedFile<T>> {
+    let raw: string;
     try {
-      const raw = await readFile(filePath, 'utf8');
-      return {
-        exists: true,
-        state: this.parse(JSON.parse(raw) as unknown),
-        error: null,
-      };
+      raw = await readFile(filePath, 'utf8');
     } catch (error: unknown) {
-      const exists = await this.exists(filePath);
-      return { exists, state: null, error };
+      return { exists: await this.exists(filePath), state: null, error };
+    }
+
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(raw);
+    } catch (error: unknown) {
+      return { exists: true, state: null, error };
+    }
+
+    // Migration failures (e.g. a newer schema version than this build supports)
+    // intentionally propagate: load() must not treat future-version data as
+    // corruption and overwrite it.
+    const migrated = this.migrate ? this.migrate(parsedJson) : parsedJson;
+
+    try {
+      return { exists: true, state: this.parse(migrated), error: null };
+    } catch (error: unknown) {
+      return { exists: true, state: null, error };
     }
   }
 
@@ -116,10 +135,15 @@ export class AtomicJsonStore<T> {
     }
   }
 
-  private async archiveCorruptFile(filePath: string): Promise<void> {
+  private async archiveCorruptFile(filePath: string): Promise<string | null> {
     const stamp = this.now().toISOString().replace(/[:.]/g, '-');
     const archivePath = `${filePath}.corrupt-${stamp}`;
-    await rename(filePath, archivePath).catch(() => undefined);
+    try {
+      await rename(filePath, archivePath);
+      return archivePath;
+    } catch {
+      return null;
+    }
   }
 
   private async syncDirectory(directory: string): Promise<void> {

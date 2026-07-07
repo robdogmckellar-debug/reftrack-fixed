@@ -6,6 +6,7 @@ import './styles/global.css';
 import './styles/design-system.css';
 import './styles/dialog-layout.css';
 import './styles/shell.css';
+import './styles/storage-recovery.css';
 import './styles/accessibility.css';
 import './styles/dashboard.css';
 import './styles/dashboard-card-layout.css';

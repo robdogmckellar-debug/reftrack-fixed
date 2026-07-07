@@ -1,12 +1,15 @@
 import type { AppStateV1 } from '../../domain/app-state';
 import { createDefaultAppState } from '../../domain/defaults';
+import type { StorageStatus } from '../../shared/ipc/contract';
 import { AtomicJsonStore, type StateLoadSource } from '../persistence/atomic-json-store';
+import { migrateToCurrent } from '../persistence/migrations';
 import { parseAppState } from '../persistence/state-schema';
 
 export interface StateServiceInitialisation {
   source: StateLoadSource;
   recovered: boolean;
   revision: number;
+  archivedPath: string | null;
 }
 
 export interface StateServiceOptions {
@@ -16,12 +19,19 @@ export interface StateServiceOptions {
 export class StateService {
   private state: AppStateV1;
   private queueTail: Promise<void> = Promise.resolve();
+  private readonly storageStatus: StorageStatus;
 
   private constructor(
     private readonly store: AtomicJsonStore<AppStateV1>,
     initialState: AppStateV1,
+    initialisation: StateServiceInitialisation,
   ) {
     this.state = parseAppState(initialState);
+    this.storageStatus = {
+      source: initialisation.source,
+      recovered: initialisation.recovered,
+      archivedPath: initialisation.archivedPath,
+    };
   }
 
   static async create(
@@ -31,17 +41,24 @@ export class StateService {
       filePath: options.filePath,
       parse: parseAppState,
       createDefault: createDefaultAppState,
+      migrate: migrateToCurrent,
     });
     const loaded = await store.load();
+    const initialisation: StateServiceInitialisation = {
+      source: loaded.source,
+      recovered: loaded.recovered,
+      revision: loaded.state.revision,
+      archivedPath: loaded.archivedPath,
+    };
 
     return {
-      service: new StateService(store, loaded.state),
-      initialisation: {
-        source: loaded.source,
-        recovered: loaded.recovered,
-        revision: loaded.state.revision,
-      },
+      service: new StateService(store, loaded.state, initialisation),
+      initialisation,
     };
+  }
+
+  getStorageStatus(): StorageStatus {
+    return { ...this.storageStatus };
   }
 
   getSnapshot(): AppStateV1 {

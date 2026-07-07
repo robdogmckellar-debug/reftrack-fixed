@@ -9,6 +9,7 @@ export const IPC_CHANNELS = {
   actionsUndoSuccess: 'actions:undo-success',
   settingsSetImageCleanerEnabled: 'settings:set-image-cleaner-enabled',
   settingsSelectImageCleanerFolder: 'settings:select-image-cleaner-folder',
+  settingsSetImageCleanerHotkey: 'settings:set-image-cleaner-hotkey',
   imageCleanerRun: 'image-cleaner:run',
   imageCleanerCompleted: 'image-cleaner:completed',
   tasksUpsertCategory: 'tasks:upsert-category',

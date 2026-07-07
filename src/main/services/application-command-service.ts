@@ -215,6 +215,13 @@ export class ApplicationCommandService {
     return { snapshot: toRendererSnapshot(state) };
   }
 
+  async setImageCleanerHotkey(hotkey: string | null): Promise<SnapshotResponse> {
+    const state = await this.stateService.update((draft) => {
+      draft.settings.imageCleaner.hotkey = hotkey;
+    });
+    return { snapshot: toRendererSnapshot(state) };
+  }
+
   async upsertTaskCategory(category: TaskCategory): Promise<TaskCategoryUpsertResponse> {
     const state = await this.stateService.update((draft) => {
       const index = draft.taskCategories.findIndex((candidate) => candidate.id === category.id);

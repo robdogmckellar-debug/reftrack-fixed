@@ -35,6 +35,7 @@ export interface RendererSettings {
   darkMode: boolean;
   folderClearEnabled: boolean;
   folderClearPath: string | null;
+  folderClearHotkey?: string | null;
 }
 
 export type RendererTaskColour =

@@ -216,6 +216,7 @@
 .settings-control-card,
 .settings-folder-card,
 .settings-manual-run,
+.settings-hotkey,
 .settings-format-section,
 .settings-safety,
 .settings-panel--recent > .settings-empty-result,
@@ -238,6 +239,60 @@
   color: var(--color-text-muted);
   font-size: var(--font-size-1);
   line-height: 1.45;
+}
+
+.settings-hotkey {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-input);
+  padding: var(--space-4);
+}
+
+.settings-hotkey__copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.settings-hotkey__label {
+  color: var(--color-text);
+  font-size: var(--font-size-2);
+  font-weight: 680;
+}
+
+.settings-hotkey__value {
+  justify-self: start;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  padding: 2px 8px;
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-1);
+}
+
+.settings-hotkey__empty {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-1);
+  font-style: italic;
+}
+
+.settings-hotkey__hint {
+  max-width: 520px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-1);
+  line-height: 1.45;
+}
+
+.settings-hotkey__actions {
+  display: flex;
+  flex: none;
+  gap: var(--space-2);
 }
 
 .settings-panel > :last-child {

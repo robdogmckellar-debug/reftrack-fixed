@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { APP_STATE_SCHEMA_VERSION, type AppStateV1 } from '../../domain/app-state';
-import { isValidIsoDate, isValidIsoTimestamp } from '../../domain/date/iso-date';
+import { isValidIsoDate, isValidIsoTimestamp } from '../../shared/date/iso-date';
 import { TASK_COLOURS } from '../../domain/entities/task-category';
 
 const EntityIdSchema = z.string().trim().min(1).max(160);

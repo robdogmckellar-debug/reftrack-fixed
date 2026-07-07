@@ -4,7 +4,11 @@ import { z } from 'zod';
 
 import { centsToDollars } from '../../domain/money/money';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
-import type { ApplicationInfo, SelectImageCleanerFolderResponse } from '../../shared/ipc/contract';
+import type {
+  ApplicationInfo,
+  ImageCleanupStart,
+  SelectImageCleanerFolderResponse,
+} from '../../shared/ipc/contract';
 import type { IpcFailure, IpcResult } from '../../shared/ipc/result';
 import {
   ActionNotificationRequestSchema,
@@ -161,6 +165,12 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
       return { selected: true, folderPath, snapshot: response.snapshot };
     },
   );
+
+  registerHandler(IPC_CHANNELS.imageCleanerRun, EmptyRequestSchema, (): ImageCleanupStart => {
+    const { folderClearPath } = commands.getRendererSnapshot().settings;
+    if (!folderClearPath) return { status: 'not-configured', jobId: null };
+    return cleanupCoordinator.start(folderClearPath);
+  });
 
   registerHandler(IPC_CHANNELS.tasksUpsertCategory, TaskCategoryUpsertRequestSchema, (request) =>
     commands.upsertTaskCategory(request.category),

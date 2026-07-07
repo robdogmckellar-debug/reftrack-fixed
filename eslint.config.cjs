@@ -8,42 +8,6 @@ module.exports = defineConfig(
     ignores: ['node_modules/**', 'dist/**', 'out/**', 'coverage/**', 'artifacts/**'],
   },
   {
-    files: ['src/main/**/*.js'],
-    extends: [js.configs.recommended],
-    languageOptions: {
-      ecmaVersion: 'latest',
-      sourceType: 'module',
-      globals: {
-        ...globals.node,
-      },
-    },
-    rules: {
-      // This temporary compatibility module is replaced incrementally by the
-      // typed domain, persistence, IPC, cleaner, and importer chunks.
-      'no-unused-vars': 'off',
-      'no-empty': 'off',
-      'no-useless-escape': 'off',
-    },
-  },
-  {
-    files: ['src/renderer/legacy/legacy-app.js'],
-    extends: [js.configs.recommended],
-    languageOptions: {
-      ecmaVersion: 'latest',
-      sourceType: 'module',
-      globals: {
-        ...globals.browser,
-      },
-    },
-    rules: {
-      // The current renderer remains a single legacy module until the Preact
-      // replacement begins. These exceptions are removed screen by screen.
-      'no-unused-vars': 'off',
-      'no-empty': 'off',
-      'no-misleading-character-class': 'off',
-    },
-  },
-  {
     files: ['**/*.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommended],
     languageOptions: {

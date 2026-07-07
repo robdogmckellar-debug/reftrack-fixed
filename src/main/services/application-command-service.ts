@@ -13,7 +13,7 @@ import type {
   TaskCompletionItem,
 } from '../../shared/ipc/contract';
 import type { RendererSnapshot } from '../../shared/view-model/renderer-snapshot';
-import { toLegacyAppData } from '../view-model/renderer-snapshot-adapter';
+import { toRendererSnapshot } from '../view-model/renderer-snapshot-adapter';
 import type { StateService } from './state-service';
 import { ApplicationError } from './application-error';
 
@@ -54,7 +54,7 @@ export class ApplicationCommandService {
       draft.sites[index] = site;
     });
 
-    return { siteId, snapshot: toLegacyAppData(state) };
+    return { siteId, snapshot: toRendererSnapshot(state) };
   }
 
   async deleteSite(siteId: string, occurredAt: string): Promise<SnapshotResponse> {
@@ -84,14 +84,14 @@ export class ApplicationCommandService {
       draft.activity = draft.activity.slice(0, 500);
     });
 
-    return { snapshot: toLegacyAppData(state) };
+    return { snapshot: toRendererSnapshot(state) };
   }
 
   async clearActivity(): Promise<SnapshotResponse> {
     const state = await this.stateService.update((draft) => {
       draft.activity = [];
     });
-    return { snapshot: toLegacyAppData(state) };
+    return { snapshot: toRendererSnapshot(state) };
   }
 
   assertCopyAllowed(siteId: string, occurredAt: string): void {
@@ -138,7 +138,7 @@ export class ApplicationCommandService {
       draft.activity = draft.activity.slice(0, 500);
     });
 
-    return { snapshot: toLegacyAppData(state) };
+    return { snapshot: toRendererSnapshot(state) };
   }
 
   async recordSuccess(siteId: string, occurredAt: string): Promise<RecordSuccessResponse> {
@@ -164,7 +164,7 @@ export class ApplicationCommandService {
       draft.activity = draft.activity.slice(0, 500);
     });
 
-    return { activityId, bonusCents, snapshot: toLegacyAppData(state) };
+    return { activityId, bonusCents, snapshot: toRendererSnapshot(state) };
   }
 
   async undoSuccess(activityId: string): Promise<SnapshotResponse> {
@@ -194,21 +194,21 @@ export class ApplicationCommandService {
       draft.activity.splice(activityIndex, 1);
     });
 
-    return { snapshot: toLegacyAppData(state) };
+    return { snapshot: toRendererSnapshot(state) };
   }
 
   async setImageCleanerEnabled(enabled: boolean): Promise<SnapshotResponse> {
     const state = await this.stateService.update((draft) => {
       draft.settings.imageCleaner.enabled = enabled;
     });
-    return { snapshot: toLegacyAppData(state) };
+    return { snapshot: toRendererSnapshot(state) };
   }
 
   async setImageCleanerFolder(folderPath: string): Promise<SnapshotResponse> {
     const state = await this.stateService.update((draft) => {
       draft.settings.imageCleaner.folderPath = folderPath;
     });
-    return { snapshot: toLegacyAppData(state) };
+    return { snapshot: toRendererSnapshot(state) };
   }
 
   async upsertTaskCategory(category: TaskCategory): Promise<TaskCategoryUpsertResponse> {
@@ -227,7 +227,7 @@ export class ApplicationCommandService {
       }
     });
 
-    return { categoryId: category.id, snapshot: toLegacyAppData(state) };
+    return { categoryId: category.id, snapshot: toRendererSnapshot(state) };
   }
 
   async deleteTaskCategory(categoryId: string): Promise<SnapshotResponse> {
@@ -246,7 +246,7 @@ export class ApplicationCommandService {
       }
     });
 
-    return { snapshot: toLegacyAppData(state) };
+    return { snapshot: toRendererSnapshot(state) };
   }
 
   async setTaskCompletion(date: string, item: TaskCompletionItem): Promise<SnapshotResponse> {
@@ -276,11 +276,11 @@ export class ApplicationCommandService {
       }
     });
 
-    return { snapshot: toLegacyAppData(state) };
+    return { snapshot: toRendererSnapshot(state) };
   }
 
   getRendererSnapshot(): RendererSnapshot {
-    return toLegacyAppData(this.stateService.getSnapshot());
+    return toRendererSnapshot(this.stateService.getSnapshot());
   }
 }
 

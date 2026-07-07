@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { isValidIsoDate } from '../date/iso-date';
+
 export const EmptyRequestSchema = z.undefined();
 
 const EntityIdSchema = z.string().trim().min(1).max(160);
@@ -120,18 +122,6 @@ export const ImporterStartRequestSchema = z
   .strict();
 
 export const ImporterCancelRequestSchema = z.object({ jobId: EntityIdSchema }).strict();
-
-function isValidIsoDate(value: string): boolean {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return false;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return (
-    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
-  );
-}
 
 function isOptionalCredentialFreeHttpsUrl(value: string): boolean {
   if (!value) return true;

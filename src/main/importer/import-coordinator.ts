@@ -8,7 +8,7 @@ import type {
   ImporterProgressEvent,
   ImporterStartResponse,
 } from '../../shared/ipc/contract';
-import type { IpcErrorCode } from '../../shared/ipc/result';
+import { isIpcErrorCode, type IpcErrorCode } from '../../shared/ipc/error-codes';
 import { ApplicationError } from '../services/application-error';
 import { runBrowserFallback } from './browser-fallback';
 import { validateImporterUrl } from './network-policy';
@@ -267,30 +267,6 @@ function normaliseError(error: unknown): ApplicationError {
   });
 }
 
-const IPC_ERROR_CODES = new Set<IpcErrorCode>([
-  'VALIDATION_FAILED',
-  'UNTRUSTED_SENDER',
-  'NOT_FOUND',
-  'DAILY_LIMIT_REACHED',
-  'ACTION_IN_PROGRESS',
-  'PERSISTENCE_FAILED',
-  'CLIPBOARD_FAILED',
-  'NOTIFICATION_FAILED',
-  'EXTERNAL_URL_REJECTED',
-  'EXTERNAL_URL_FAILED',
-  'FOLDER_SELECTION_FAILED',
-  'FOLDER_UNAVAILABLE',
-  'UNSAFE_PATH',
-  'IMAGE_CLEANUP_FAILED',
-  'IMPORT_IN_PROGRESS',
-  'IMPORT_CANCELLED',
-  'IMPORT_TIMEOUT',
-  'IMPORT_NETWORK_REJECTED',
-  'IMPORT_UNSUPPORTED_PAGE',
-  'IMPORT_FAILED',
-  'INTERNAL_ERROR',
-]);
-
 function normaliseErrorCode(value: string): IpcErrorCode {
-  return IPC_ERROR_CODES.has(value as IpcErrorCode) ? (value as IpcErrorCode) : 'IMPORT_FAILED';
+  return isIpcErrorCode(value) ? value : 'IMPORT_FAILED';
 }

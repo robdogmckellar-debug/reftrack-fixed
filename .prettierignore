@@ -4,10 +4,3 @@ out/
 coverage/
 artifacts/
 package-lock.json
-
-# Large legacy application files remain byte-stable until their approved
-# module-by-module replacement.
-src/main/index.js
-src/renderer/app.js
-src/renderer/index.html
-src/renderer/styles.css

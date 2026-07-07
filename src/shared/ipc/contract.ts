@@ -91,6 +91,20 @@ export interface SetImageCleanerEnabledRequest {
   enabled: boolean;
 }
 
+export interface HotkeyBindingRequest {
+  siteId: string;
+  key: string;
+}
+
+export interface SetHotkeysRequest {
+  enabled: boolean;
+  bindings: HotkeyBindingRequest[];
+}
+
+export interface HotkeyTriggeredEvent {
+  siteId: string;
+}
+
 export interface SelectImageCleanerFolderResponse extends SnapshotResponse {
   selected: boolean;
   folderPath: string | null;
@@ -224,6 +238,13 @@ export interface RefTrackApi {
       request: SetImageCleanerEnabledRequest,
     ): Promise<IpcResult<SnapshotResponse>>;
     selectImageCleanerFolder(): Promise<IpcResult<SelectImageCleanerFolderResponse>>;
+    setHotkeys(request: SetHotkeysRequest): Promise<IpcResult<SnapshotResponse>>;
+  };
+  window: {
+    minimize(): Promise<IpcResult<{ minimized: boolean }>>;
+  };
+  hotkeys: {
+    onTriggered(listener: (event: HotkeyTriggeredEvent) => void): () => void;
   };
   imageCleaner: {
     onCompleted(listener: (event: ImageCleanupCompletedEvent) => void): () => void;

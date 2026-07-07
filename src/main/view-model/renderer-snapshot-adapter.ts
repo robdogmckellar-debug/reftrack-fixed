@@ -58,6 +58,13 @@ export function toRendererSnapshot(state: AppStateV1): RendererSnapshot {
       darkMode: state.settings.darkMode,
       folderClearEnabled: state.settings.imageCleaner.enabled,
       folderClearPath: state.settings.imageCleaner.folderPath,
+      hotkeys: {
+        enabled: state.settings.hotkeys.enabled,
+        bindings: state.settings.hotkeys.bindings.map((binding) => ({
+          siteId: binding.siteId,
+          key: binding.key,
+        })),
+      },
     },
     tasks: {
       categories: structuredClone(state.taskCategories),

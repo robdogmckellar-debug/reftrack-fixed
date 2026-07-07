@@ -34,8 +34,33 @@
 .app-brand,
 .app-nav,
 .app-titlebar__meta,
+.app-titlebar__window-button,
 .app-nav__item {
   -webkit-app-region: no-drag;
+}
+
+.app-titlebar__window-button {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--easing-standard),
+    border-color var(--duration-fast) var(--easing-standard),
+    color var(--duration-fast) var(--easing-standard);
+}
+
+.app-titlebar__window-button:hover {
+  border-color: rgba(182, 194, 208, 0.14);
+  background: var(--color-surface-2);
+  color: var(--color-text);
 }
 
 .app-brand {

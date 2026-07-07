@@ -7,6 +7,23 @@ import type { Session } from 'electron';
 import { resolveApplicationAssetPath } from './application-asset-path';
 import { APP_PROTOCOL } from './constants';
 
+// Production Content-Security-Policy, served as a response header from the
+// packaged `reftrack://` origin. It is stricter than the dev-oriented <meta>
+// policy in index.html (no `ws://localhost:*` for HMR); when both are present
+// the browser enforces the intersection. Development uses the electron-vite
+// dev server, which never hits this handler, so HMR is unaffected.
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-src 'none'",
+  "form-action 'self'",
+  "connect-src 'self'",
+].join('; ');
+
 const MIME_TYPES: Readonly<Record<string, string>> = {
   '.css': 'text/css; charset=utf-8',
   '.gif': 'image/gif',
@@ -70,6 +87,7 @@ export function registerApplicationProtocol(session: Session, rendererRoot: stri
           'content-type': contentTypeFor(filePath),
           'cache-control': isEntryDocument ? 'no-cache' : 'public, max-age=31536000, immutable',
           'x-content-type-options': 'nosniff',
+          'content-security-policy': CONTENT_SECURITY_POLICY,
         },
       });
     } catch (error) {

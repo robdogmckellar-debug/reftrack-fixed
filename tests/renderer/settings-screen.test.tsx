@@ -46,6 +46,8 @@ interface ApiMocks {
   getInfo: ReturnType<typeof vi.fn>;
   setEnabled: ReturnType<typeof vi.fn>;
   selectFolder: ReturnType<typeof vi.fn>;
+  setHotkey: ReturnType<typeof vi.fn>;
+  runCleanup: ReturnType<typeof vi.fn>;
   emitCleanup(event: ImageCleanupCompletedEvent): void;
 }
 
@@ -54,6 +56,8 @@ function installApi(): ApiMocks {
   const getInfo = vi.fn().mockResolvedValue({ ok: true, data: APPLICATION_INFO });
   const setEnabled = vi.fn();
   const selectFolder = vi.fn();
+  const setHotkey = vi.fn();
+  const runCleanup = vi.fn();
 
   const api = {
     bootstrap: vi.fn(),
@@ -64,8 +68,10 @@ function installApi(): ApiMocks {
     settings: {
       setImageCleanerEnabled: setEnabled,
       selectImageCleanerFolder: selectFolder,
+      setImageCleanerHotkey: setHotkey,
     },
     imageCleaner: {
+      run: runCleanup,
       onCompleted: vi.fn((listener: (event: ImageCleanupCompletedEvent) => void) => {
         cleanupListener = listener;
         return () => {
@@ -94,6 +100,8 @@ function installApi(): ApiMocks {
     getInfo,
     setEnabled,
     selectFolder,
+    setHotkey,
+    runCleanup,
     emitCleanup: (event) => cleanupListener?.(event),
   };
 }
@@ -173,6 +181,83 @@ describe('SettingsScreen', () => {
     expect(await screen.findByText('Cleaner folder selected')).toBeTruthy();
     expect(screen.getAllByText(folderPath).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Change folder' })).toBeTruthy();
+  });
+
+  it('disables manual cleanup until a folder is configured', () => {
+    installApi();
+    publishSnapshot(createSnapshot());
+    render(<SettingsScreen active />);
+
+    expect(
+      (screen.getByRole('button', { name: 'Run cleanup now' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it('triggers a manual cleanup on demand and clears the running state on completion', async () => {
+    const mocks = installApi();
+    const folderPath = 'C:\\Users\\Test\\Pictures\\RefTrack';
+    mocks.runCleanup.mockResolvedValue({
+      ok: true,
+      data: { status: 'started', jobId: 'cleanup_manual_1' },
+    });
+    publishSnapshot(
+      createSnapshot({
+        settings: { darkMode: true, folderClearEnabled: true, folderClearPath: folderPath },
+      }),
+    );
+    render(<SettingsScreen active />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run cleanup now' }));
+
+    await waitFor(() => expect(mocks.runCleanup).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Cleanup started')).toBeTruthy();
+
+    mocks.emitCleanup({
+      jobId: 'cleanup_manual_1',
+      folderPath,
+      startedAt: '2026-07-02T01:00:00.000Z',
+      completedAt: '2026-07-02T01:00:01.000Z',
+      ok: true,
+      scanned: 4,
+      eligible: 2,
+      movedToRecycleBin: 2,
+      skipped: 2,
+      failed: 0,
+      failures: [],
+      errorCode: null,
+      errorMessage: null,
+    });
+
+    expect(await screen.findByText('Cleanup completed')).toBeTruthy();
+  });
+
+  it('records a global shortcut and saves it through typed IPC', async () => {
+    const mocks = installApi();
+    mocks.setHotkey.mockResolvedValue({
+      ok: true,
+      data: {
+        snapshot: createSnapshot({
+          settings: {
+            darkMode: true,
+            folderClearEnabled: false,
+            folderClearPath: null,
+            folderClearHotkey: 'CommandOrControl+Shift+K',
+          },
+        }),
+      },
+    });
+
+    publishSnapshot(createSnapshot());
+    render(<SettingsScreen active />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set shortcut' }));
+    const recorder = screen.getByRole('button', { name: 'Press a shortcut… (Esc)' });
+    fireEvent.keyDown(recorder, { key: 'k', ctrlKey: true, shiftKey: true });
+
+    await waitFor(() =>
+      expect(mocks.setHotkey).toHaveBeenCalledWith({ hotkey: 'CommandOrControl+Shift+K' }),
+    );
+    expect(await screen.findByText('Shortcut set')).toBeTruthy();
   });
 
   it('keeps and renders the most recent cleanup result while the screen is mounted', async () => {

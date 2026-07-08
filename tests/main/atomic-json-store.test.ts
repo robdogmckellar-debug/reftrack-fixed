@@ -66,6 +66,41 @@ describe('atomic JSON storage', () => {
     expect((await readdir(directory)).some((name) => name.includes('.corrupt-'))).toBe(true);
   });
 
+  it('reports the archived path when both primary and backup are unreadable', async () => {
+    const { filePath, store } = await createStore();
+    await store.load();
+    await writeFile(filePath, '{broken', 'utf8');
+    await writeFile(store.backupPath, 'also-broken', 'utf8');
+
+    const reset = await store.load();
+
+    expect(reset.source).toBe('default');
+    expect(reset.recovered).toBe(true);
+    expect(reset.archivedPath).toMatch(/\.corrupt-/);
+  });
+
+  it('refuses to overwrite data from a newer schema version', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'reftrack-future-'));
+    temporaryDirectories.push(directory);
+    const filePath = path.join(directory, 'state.json');
+    await writeFile(filePath, JSON.stringify({ schemaVersion: 999 }), 'utf8');
+
+    const store = new AtomicJsonStore({
+      filePath,
+      parse: parseAppState,
+      createDefault: createDefaultAppState,
+      migrate: (value) => {
+        const version = (value as { schemaVersion?: number }).schemaVersion ?? 1;
+        if (version > 1) throw new Error('future version');
+        return value;
+      },
+    });
+
+    await expect(store.load()).rejects.toThrow('future version');
+    // The original file must remain untouched (not archived or replaced).
+    expect(JSON.parse(await readFile(filePath, 'utf8'))).toEqual({ schemaVersion: 999 });
+  });
+
   it('leaves no temporary files after a successful commit', async () => {
     const { directory, store } = await createStore();
     const initial = (await store.load()).state;

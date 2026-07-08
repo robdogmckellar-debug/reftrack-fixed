@@ -11,6 +11,7 @@ import {
   getCurrentSnapshot,
   navigateTo,
   resetRendererForRetry,
+  storageStatus,
 } from '../../src/renderer/app/store';
 
 const snapshot: RendererSnapshot = {
@@ -72,6 +73,26 @@ describe('renderer Signals store', () => {
       code: 'PERSISTENCE_FAILED',
       message: 'The local state file could not be opened.',
       recoverable: true,
+    });
+  });
+
+  it('records storage recovery status from bootstrap', async () => {
+    const bootstrap = vi.fn().mockResolvedValue({
+      ok: true,
+      data: {
+        snapshot,
+        storage: { source: 'backup', recovered: true, archivedPath: '/data/state.json.corrupt-x' },
+      },
+    });
+    Object.defineProperty(window, 'reftrack', { configurable: true, value: { bootstrap } });
+
+    await bootstrapRenderer();
+
+    expect(bootStatus.value).toBe('ready');
+    expect(storageStatus.value).toEqual({
+      source: 'backup',
+      recovered: true,
+      archivedPath: '/data/state.json.corrupt-x',
     });
   });
 

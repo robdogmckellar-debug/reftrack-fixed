@@ -33,6 +33,8 @@ const reftrackApi: RefTrackApi = {
       ipcRenderer.invoke(IPC_CHANNELS.settingsSetImageCleanerEnabled, request),
     selectImageCleanerFolder: () =>
       ipcRenderer.invoke(IPC_CHANNELS.settingsSelectImageCleanerFolder),
+    setImageCleanerHotkey: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.settingsSetImageCleanerHotkey, request),
     setHotkeys: (request) => ipcRenderer.invoke(IPC_CHANNELS.settingsSetHotkeys, request),
   },
   window: {
@@ -48,6 +50,7 @@ const reftrackApi: RefTrackApi = {
     },
   },
   imageCleaner: {
+    run: () => ipcRenderer.invoke(IPC_CHANNELS.imageCleanerRun),
     onCompleted: (listener) => {
       const wrapped = (
         _event: Electron.IpcRendererEvent,

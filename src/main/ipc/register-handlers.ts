@@ -6,7 +6,11 @@ import { z } from 'zod';
 
 import { centsToDollars } from '../../domain/money/money';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
-import type { ApplicationInfo, SelectImageCleanerFolderResponse } from '../../shared/ipc/contract';
+import type {
+  ApplicationInfo,
+  ImageCleanupStart,
+  SelectImageCleanerFolderResponse,
+} from '../../shared/ipc/contract';
 import type { IpcFailure, IpcResult } from '../../shared/ipc/result';
 import {
   ActionNotificationRequestSchema,
@@ -22,6 +26,7 @@ import {
   RecordSuccessRequestSchema,
   SetHotkeysRequestSchema,
   SetImageCleanerEnabledRequestSchema,
+  SetImageCleanerHotkeyRequestSchema,
   SiteDeleteRequestSchema,
   SiteUpsertRequestSchema,
   TaskCategoryDeleteRequestSchema,
@@ -39,6 +44,7 @@ import { CopyActionService } from '../services/copy-action-service';
 import { ApplicationError } from '../services/application-error';
 import type { HotkeyService } from '../services/hotkey-service';
 import { ImageCleanerService, ImageCleanupCoordinator } from '../services/image-cleaner-service';
+import { ImageCleanerHotkey } from '../services/image-cleaner-hotkey';
 import type { StateService } from '../services/state-service';
 import { assertTrustedIpcSender } from './validate-sender';
 import { validateExternalUrl } from './url-policy';
@@ -130,6 +136,34 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
       ? { developmentRendererUrl: options.developmentRendererUrl }
       : {}),
   };
+
+  const runImageCleanup = (): ImageCleanupStart => {
+    const { folderClearPath } = commands.getRendererSnapshot().settings;
+    if (!folderClearPath) return { status: 'not-configured', jobId: null };
+    return cleanupCoordinator.start(folderClearPath);
+  };
+
+  const imageCleanerHotkey = new ImageCleanerHotkey({
+    onTrigger: () => {
+      const outcome = runImageCleanup();
+      if (outcome.status === 'not-configured' && Notification.isSupported()) {
+        new Notification({
+          title: 'RefTrack Image Cleaner',
+          body: 'Choose a dedicated folder in Settings before running cleanup.',
+        }).show();
+      }
+    },
+  });
+
+  const savedHotkey = commands.getRendererSnapshot().settings.folderClearHotkey ?? null;
+  if (savedHotkey) {
+    const result = imageCleanerHotkey.apply(savedHotkey);
+    if (!result.ok) {
+      console.warn(
+        `[RefTrack] Could not register the saved image-cleaner shortcut "${savedHotkey}" (${result.reason}).`,
+      );
+    }
+  }
 
   registerHandler(IPC_CHANNELS.appBootstrap, EmptyRequestSchema, () => commands.bootstrap());
 
@@ -224,6 +258,26 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
       const folderPath = await imageCleaner.validateFolder(selectedPath);
       const response = await commands.setImageCleanerFolder(folderPath);
       return { selected: true, folderPath, snapshot: response.snapshot };
+    },
+  );
+
+  registerHandler(IPC_CHANNELS.imageCleanerRun, EmptyRequestSchema, () => runImageCleanup());
+
+  registerHandler(
+    IPC_CHANNELS.settingsSetImageCleanerHotkey,
+    SetImageCleanerHotkeyRequestSchema,
+    (request) => {
+      const result = imageCleanerHotkey.apply(request.hotkey);
+      if (!result.ok) {
+        throw new ApplicationError(
+          'HOTKEY_REGISTRATION_FAILED',
+          result.reason === 'conflict'
+            ? 'That shortcut is already used by another application.'
+            : 'That keyboard shortcut is not valid.',
+          { field: 'hotkey', recoverable: true },
+        );
+      }
+      return commands.setImageCleanerHotkey(request.hotkey);
     },
   );
 
@@ -329,6 +383,7 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
   return {
     dispose: () => {
       importer.dispose();
+      imageCleanerHotkey.dispose();
       checkin.dispose();
       for (const channel of Object.values(IPC_CHANNELS)) ipcMain.removeHandler(channel);
     },

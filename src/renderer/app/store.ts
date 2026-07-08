@@ -1,5 +1,6 @@
 import { batch, computed, signal } from '@preact/signals';
 
+import type { StorageStatus } from '../../shared/ipc/contract';
 import type { RendererSnapshot } from '../../shared/view-model/renderer-snapshot';
 import { resetDashboardStore, synchroniseDashboard } from '../screens/dashboard/dashboard-store';
 
@@ -20,6 +21,7 @@ export const activeScreen = signal<ScreenId>('dashboard');
 export const rendererSnapshot = signal<RendererSnapshot | null>(null);
 export const bootStatus = signal<BootStatus>('idle');
 export const bootFailure = signal<RendererFailure | null>(null);
+export const storageStatus = signal<StorageStatus | null>(null);
 
 export const activeScreenTitle = computed(() => {
   switch (activeScreen.value) {
@@ -90,6 +92,7 @@ export function resetRendererForRetry(): void {
     resetDashboardStore();
     bootStatus.value = 'idle';
     bootFailure.value = null;
+    storageStatus.value = null;
   });
 }
 
@@ -118,6 +121,7 @@ export function bootstrapRenderer(): Promise<void> {
 
       batch(() => {
         publishSnapshot(result.data.snapshot);
+        storageStatus.value = result.data.storage ?? null;
         bootStatus.value = 'ready';
         bootFailure.value = null;
       });

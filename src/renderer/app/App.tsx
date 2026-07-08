@@ -8,6 +8,7 @@ import {
   activeScreen,
   resetRendererForRetry,
 } from './store';
+import { StorageRecoveryBanner } from '../components/StorageRecoveryBanner';
 import { TitleBar } from '../components/TitleBar';
 import { RefreshIcon } from '../components/icons';
 import { Button } from '../design-system/Button';
@@ -77,6 +78,7 @@ export function App(): JSX.Element {
   return (
     <div class="app-shell">
       <TitleBar />
+      <StorageRecoveryBanner />
       <div class="app-workspace">
         <DashboardScreen active={screen === 'dashboard'} />
         <SiteEditorScreen active={screen === 'editor'} />

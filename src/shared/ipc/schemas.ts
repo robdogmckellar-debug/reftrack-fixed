@@ -58,6 +58,10 @@ export const UndoSuccessRequestSchema = z
 
 export const SetImageCleanerEnabledRequestSchema = z.object({ enabled: z.boolean() }).strict();
 
+export const SetImageCleanerHotkeyRequestSchema = z
+  .object({ hotkey: z.string().trim().min(1).max(120).nullable() })
+  .strict();
+
 export const SetHotkeysRequestSchema = z
   .object({
     enabled: z.boolean(),

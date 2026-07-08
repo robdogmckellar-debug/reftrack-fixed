@@ -16,6 +16,19 @@ export interface SnapshotResponse {
   snapshot: RendererSnapshot;
 }
 
+export interface StorageStatus {
+  /** Where the loaded state came from. `primary` is the normal, healthy case. */
+  source: 'primary' | 'backup' | 'default';
+  /** True when the primary file could not be read and a fallback was used. */
+  recovered: boolean;
+  /** Absolute path of the archived unreadable file, when one was set aside. */
+  archivedPath: string | null;
+}
+
+export interface BootstrapResponse extends SnapshotResponse {
+  storage: StorageStatus;
+}
+
 export interface SiteUpsertRequest {
   id: string | null;
   name: string;
@@ -89,6 +102,10 @@ export interface UndoSuccessRequest {
 
 export interface SetImageCleanerEnabledRequest {
   enabled: boolean;
+}
+
+export interface SetImageCleanerHotkeyRequest {
+  hotkey: string | null;
 }
 
 export interface HotkeyBindingRequest {
@@ -286,7 +303,7 @@ export interface CheckinCompletedEvent {
 }
 
 export interface RefTrackApi {
-  bootstrap(): Promise<IpcResult<SnapshotResponse>>;
+  bootstrap(): Promise<IpcResult<BootstrapResponse>>;
   app: {
     getInfo(): Promise<IpcResult<ApplicationInfo>>;
   };
@@ -307,6 +324,9 @@ export interface RefTrackApi {
       request: SetImageCleanerEnabledRequest,
     ): Promise<IpcResult<SnapshotResponse>>;
     selectImageCleanerFolder(): Promise<IpcResult<SelectImageCleanerFolderResponse>>;
+    setImageCleanerHotkey(
+      request: SetImageCleanerHotkeyRequest,
+    ): Promise<IpcResult<SnapshotResponse>>;
     setHotkeys(request: SetHotkeysRequest): Promise<IpcResult<SnapshotResponse>>;
   };
   window: {
@@ -316,6 +336,7 @@ export interface RefTrackApi {
     onTriggered(listener: (event: HotkeyTriggeredEvent) => void): () => void;
   };
   imageCleaner: {
+    run(): Promise<IpcResult<ImageCleanupStart>>;
     onCompleted(listener: (event: ImageCleanupCompletedEvent) => void): () => void;
   };
   tasks: {

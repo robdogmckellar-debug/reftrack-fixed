@@ -5,6 +5,7 @@ import type { DailySiteMetrics } from '../../domain/entities/daily-metrics';
 import type { Site } from '../../domain/entities/site';
 import type { CheckinResultRecord, TaskCategory } from '../../domain/entities/task-category';
 import type {
+  BootstrapResponse,
   RecordSuccessResponse,
   SetHotkeysRequest,
   SiteUpsertRequest,
@@ -21,8 +22,11 @@ import { ApplicationError } from './application-error';
 export class ApplicationCommandService {
   constructor(private readonly stateService: StateService) {}
 
-  bootstrap(): SnapshotResponse {
-    return { snapshot: this.getRendererSnapshot() };
+  bootstrap(): BootstrapResponse {
+    return {
+      snapshot: this.getRendererSnapshot(),
+      storage: this.stateService.getStorageStatus(),
+    };
   }
 
   async upsertSite(request: SiteUpsertRequest): Promise<SiteUpsertResponse> {
@@ -208,6 +212,13 @@ export class ApplicationCommandService {
   async setImageCleanerFolder(folderPath: string): Promise<SnapshotResponse> {
     const state = await this.stateService.update((draft) => {
       draft.settings.imageCleaner.folderPath = folderPath;
+    });
+    return { snapshot: toRendererSnapshot(state) };
+  }
+
+  async setImageCleanerHotkey(hotkey: string | null): Promise<SnapshotResponse> {
+    const state = await this.stateService.update((draft) => {
+      draft.settings.imageCleaner.hotkey = hotkey;
     });
     return { snapshot: toRendererSnapshot(state) };
   }

@@ -119,6 +119,9 @@ export const AppStateV1Schema = z
           .object({
             enabled: z.boolean(),
             folderPath: z.string().max(32767).nullable(),
+            // Additive nullable field: existing v1 files without it default to
+            // null on load, so no schema-version bump/migration is required.
+            hotkey: z.string().max(120).nullable().default(null),
           })
           .strict(),
         checkin: CheckinSettingsSchema.default({ ...DEFAULT_CHECKIN_SETTINGS }),

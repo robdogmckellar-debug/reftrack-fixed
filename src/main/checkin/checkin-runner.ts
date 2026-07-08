@@ -1,26 +1,60 @@
 import { BrowserWindow, session } from 'electron';
-import type { OnBeforeRequestListenerDetails, Session } from 'electron';
+import type { Session } from 'electron';
 
 import { ApplicationError } from '../services/application-error';
 import { buildClickScript, buildExistsScript, buildFillLoginScript } from './checkin-scripts';
 import type { ClickResult, ExistsResult, FillLoginResult } from './checkin-scripts';
 import type { CheckinRunOutcome, CheckinRunnerContext } from './types';
 
-const NAVIGATION_TIMEOUT_MS = 20_000;
-const FORM_POLL_ATTEMPTS = 12;
-const FORM_POLL_INTERVAL_MS = 350;
-const LOGIN_SETTLE_MS = 1_800;
-const POPUP_POLL_ATTEMPTS = 6;
+const NAVIGATION_TIMEOUT_MS = 25_000;
+const FORM_POLL_ATTEMPTS = 20;
+const FORM_POLL_INTERVAL_MS = 400;
+const INITIAL_SETTLE_MS = 600;
+const LOGIN_SETTLE_MS = 2_500;
+const POPUP_POLL_ATTEMPTS = 8;
 const POPUP_POLL_INTERVAL_MS = 400;
-const CHECKIN_POLL_ATTEMPTS = 12;
+const CHECKIN_POLL_ATTEMPTS = 16;
 const CHECKIN_POLL_INTERVAL_MS = 400;
 const VERIFY_POLL_ATTEMPTS = 6;
 const VERIFY_POLL_INTERVAL_MS = 400;
 
+// Built-in fallbacks appended after the user-configured selectors so the flow
+// keeps working even when a site's markup differs from the stored defaults.
+const USERNAME_FALLBACKS = [
+  'form input[type="text"]',
+  'form input[type="email"]',
+  'form input[name="username"]',
+  'form input[name="email"]',
+  'form input[name="account"]',
+  'input[type="email"]',
+  'input[name="username"]',
+  'input[type="text"]',
+];
+const PASSWORD_FALLBACKS = ['form input[type="password"]', 'input[type="password"]'];
+const SUBMIT_FALLBACKS = [
+  'form a.btn.login',
+  'form .btn.login',
+  'a.btn.login',
+  '.btn.login',
+  'form button[type="submit"]',
+  'button[type="submit"]',
+];
+const CHECKIN_FALLBACKS = [
+  '.checkin-page-button-container button.checkin-page-button',
+  'button.checkin-page-button',
+  '.checkin-page-button',
+];
+const DISMISS_FALLBACKS = ['button.btn-secondary-flex', '.btn-secondary-flex'];
+
+function selectorList(configured: string, fallbacks: string[]): string[] {
+  const list = configured.trim() ? [configured.trim(), ...fallbacks] : [...fallbacks];
+  return [...new Set(list)];
+}
+
 export async function runSiteCheckin(context: CheckinRunnerContext): Promise<CheckinRunOutcome> {
   ensureNotAborted(context.signal);
-  const allowedHosts = new Set([context.hostname]);
-  const isolatedSession = createIsolatedSession(context.runId, context.taskSiteId, allowedHosts);
+  const registrableDomain = registrableDomainOf(context.hostname);
+  const isolatedSession = createIsolatedSession(context.runId, context.taskSiteId);
 
   context.reportStage('starting', `Opening a secure browser for ${context.siteName}…`);
 
@@ -50,8 +84,12 @@ export async function runSiteCheckin(context: CheckinRunnerContext): Promise<Che
   window.webContents.setAudioMuted(true);
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
+  // Keep the window from wandering off to unrelated hosts, but allow the site's
+  // own subdomains / apex + www variants so real login and post-login redirects
+  // work. Sub-resource requests (scripts, styles, fonts, CDNs) are NOT blocked,
+  // otherwise JS-rendered login forms and challenge pages never appear.
   const rejectNavigation = (event: Electron.Event, navigationUrl: string): void => {
-    if (!isAllowedUrl(navigationUrl, allowedHosts)) event.preventDefault();
+    if (!isAllowedNavigation(navigationUrl, registrableDomain)) event.preventDefault();
   };
   window.webContents.on('will-navigate', rejectNavigation);
   window.webContents.on('will-redirect', rejectNavigation);
@@ -72,7 +110,6 @@ export async function runSiteCheckin(context: CheckinRunnerContext): Promise<Che
     if (!window.isDestroyed()) window.destroy();
     isolatedSession.setPermissionCheckHandler(null);
     isolatedSession.setPermissionRequestHandler(null);
-    isolatedSession.webRequest.onBeforeRequest(null);
     isolatedSession.removeAllListeners('will-download');
     await isolatedSession.clearStorageData().catch(() => undefined);
     await isolatedSession.clearCache().catch(() => undefined);
@@ -84,27 +121,40 @@ async function performCheckin(
   context: CheckinRunnerContext,
 ): Promise<CheckinRunOutcome> {
   const { selectors } = context;
+  const usernameSelectors = selectorList(selectors.usernameSelector, USERNAME_FALLBACKS);
+  const passwordSelectors = selectorList(selectors.passwordSelector, PASSWORD_FALLBACKS);
+  const submitSelectors = selectorList(selectors.submitSelector, SUBMIT_FALLBACKS);
+  const checkinSelectors = selectorList(selectors.checkinButtonSelector, CHECKIN_FALLBACKS);
+  const dismissSelectors = selectorList(selectors.dismissSelector, DISMISS_FALLBACKS);
 
   context.reportStage('logging-in', `Signing in to ${context.siteName}…`);
   try {
     await withTimeout(window.loadURL(context.loginUrl), NAVIGATION_TIMEOUT_MS, window);
   } catch {
-    return failure('The login page could not be loaded.');
+    return failure(`The login page (${context.loginUrl}) could not be loaded.`);
   }
   ensureNotAborted(context.signal);
+  await abortableDelay(INITIAL_SETTLE_MS, context.signal);
 
   const formReady = await pollForElement(
     window,
-    selectors.passwordSelector,
+    passwordSelectors,
     FORM_POLL_ATTEMPTS,
     FORM_POLL_INTERVAL_MS,
     context.signal,
   );
-  if (!formReady) return failure('The login form was not found on the page.');
+  if (!formReady) {
+    return failure(
+      `No password field was found at ${currentUrl(window) ?? context.loginUrl}. The login page may not have finished loading or uses different fields.`,
+    );
+  }
 
   const fillResult = await execute<FillLoginResult>(
     window,
-    buildFillLoginScript(selectors, context.credentials),
+    buildFillLoginScript(
+      { usernameSelectors, passwordSelectors, submitSelectors },
+      context.credentials,
+    ),
   );
   if (!fillResult || !fillResult.filledUsername || !fillResult.filledPassword) {
     return failure('The username or password field could not be filled.');
@@ -120,15 +170,16 @@ async function performCheckin(
   try {
     await withTimeout(window.loadURL(context.checkinUrl), NAVIGATION_TIMEOUT_MS, window);
   } catch {
-    return failure('The daily check-in page could not be loaded.');
+    return failure(`The daily check-in page (${context.checkinUrl}) could not be loaded.`);
   }
   ensureNotAborted(context.signal);
+  await abortableDelay(INITIAL_SETTLE_MS, context.signal);
 
-  await dismissPopup(window, context);
+  await dismissPopup(window, context, dismissSelectors);
 
   const checkinClicked = await pollAndClick(
     window,
-    selectors.checkinButtonSelector,
+    checkinSelectors,
     CHECKIN_POLL_ATTEMPTS,
     CHECKIN_POLL_INTERVAL_MS,
     context,
@@ -146,13 +197,16 @@ async function performCheckin(
   return { status: 'success', message: `Checked in to ${context.siteName}.` };
 }
 
-async function dismissPopup(window: BrowserWindow, context: CheckinRunnerContext): Promise<void> {
-  const { dismissSelector } = context.selectors;
-  if (!dismissSelector.trim()) return;
+async function dismissPopup(
+  window: BrowserWindow,
+  context: CheckinRunnerContext,
+  dismissSelectors: string[],
+): Promise<void> {
+  if (dismissSelectors.length === 0) return;
 
   for (let attempt = 0; attempt < POPUP_POLL_ATTEMPTS; attempt += 1) {
     ensureNotAborted(context.signal);
-    const result = await execute<ClickResult>(window, buildClickScript(dismissSelector));
+    const result = await execute<ClickResult>(window, buildClickScript(dismissSelectors));
     if (result?.clicked) {
       context.reportStage('dismissing-popup', 'Dismissed an interrupting popup.');
       await abortableDelay(POPUP_POLL_INTERVAL_MS, context.signal);
@@ -173,7 +227,7 @@ async function verifyCheckin(
   }
   return pollForElement(
     window,
-    successSelector,
+    [successSelector],
     VERIFY_POLL_ATTEMPTS,
     VERIFY_POLL_INTERVAL_MS,
     context.signal,
@@ -182,14 +236,14 @@ async function verifyCheckin(
 
 async function pollForElement(
   window: BrowserWindow,
-  selector: string,
+  selectors: string[],
   attempts: number,
   intervalMs: number,
   signal: AbortSignal,
 ): Promise<boolean> {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     ensureNotAborted(signal);
-    const result = await execute<ExistsResult>(window, buildExistsScript(selector));
+    const result = await execute<ExistsResult>(window, buildExistsScript(selectors));
     if (result?.found) return true;
     await abortableDelay(intervalMs, signal);
   }
@@ -198,14 +252,14 @@ async function pollForElement(
 
 async function pollAndClick(
   window: BrowserWindow,
-  selector: string,
+  selectors: string[],
   attempts: number,
   intervalMs: number,
   context: CheckinRunnerContext,
 ): Promise<boolean> {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     ensureNotAborted(context.signal);
-    const result = await execute<ClickResult>(window, buildClickScript(selector));
+    const result = await execute<ClickResult>(window, buildClickScript(selectors));
     if (result?.clicked) return true;
     await abortableDelay(intervalMs, context.signal);
   }
@@ -221,11 +275,13 @@ async function execute<T>(window: BrowserWindow, script: string): Promise<T | nu
   }
 }
 
-function createIsolatedSession(
-  runId: string,
-  taskSiteId: string,
-  allowedHosts: Set<string>,
-): Session {
+function currentUrl(window: BrowserWindow): string | null {
+  if (window.isDestroyed() || window.webContents.isDestroyed()) return null;
+  const url = window.webContents.getURL();
+  return url || null;
+}
+
+function createIsolatedSession(runId: string, taskSiteId: string): Session {
   const isolatedSession = session.fromPartition(`reftrack-checkin-${runId}-${taskSiteId}`, {
     cache: false,
   });
@@ -236,20 +292,20 @@ function createIsolatedSession(
   isolatedSession.on('will-download', (event) => {
     event.preventDefault();
   });
-  isolatedSession.webRequest.onBeforeRequest(
-    { urls: ['<all_urls>'] },
-    (details: OnBeforeRequestListenerDetails, callback) => {
-      callback({ cancel: !isAllowedUrl(details.url, allowedHosts) });
-    },
-  );
   return isolatedSession;
 }
 
-function isAllowedUrl(value: string, allowedHosts: Set<string>): boolean {
+function registrableDomainOf(hostname: string): string {
+  const labels = hostname.toLowerCase().replace(/\.$/, '').split('.');
+  if (labels.length <= 2) return labels.join('.');
+  return labels.slice(-2).join('.');
+}
+
+function isAllowedNavigation(value: string, registrableDomain: string): boolean {
   try {
     const url = new URL(value);
     if (url.protocol !== 'https:') return false;
-    return allowedHosts.has(url.hostname);
+    return registrableDomainOf(url.hostname) === registrableDomain;
   } catch {
     return false;
   }

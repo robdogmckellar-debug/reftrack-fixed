@@ -4,6 +4,7 @@ import {
   buildClickScript,
   buildExistsScript,
   buildFillLoginScript,
+  buildTextIncludesScript,
 } from '../../src/main/checkin/checkin-scripts';
 
 describe('check-in page scripts', () => {
@@ -36,5 +37,13 @@ describe('check-in page scripts', () => {
 
     const existsScript = buildExistsScript(['button.btn-secondary-flex']);
     expect(existsScript).toContain('button.btn-secondary-flex');
+  });
+
+  it('builds a page-text probe for check-in confirmation phrases', () => {
+    const script = buildTextIncludesScript(['you have earned', 'token today']);
+    expect(script).toContain('innerText');
+    expect(script).toContain('you have earned');
+    expect(script).toContain('token today');
+    expect(script).toContain('toLowerCase()');
   });
 });

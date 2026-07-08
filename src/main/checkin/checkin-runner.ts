@@ -2,7 +2,12 @@ import { BrowserWindow, session } from 'electron';
 import type { Session } from 'electron';
 
 import { ApplicationError } from '../services/application-error';
-import { buildClickScript, buildExistsScript, buildFillLoginScript } from './checkin-scripts';
+import {
+  buildClickScript,
+  buildExistsScript,
+  buildFillLoginScript,
+  buildTextIncludesScript,
+} from './checkin-scripts';
 import type { ClickResult, ExistsResult, FillLoginResult } from './checkin-scripts';
 import type { CheckinRunOutcome, CheckinRunnerContext } from './types';
 
@@ -11,12 +16,32 @@ const FORM_POLL_ATTEMPTS = 20;
 const FORM_POLL_INTERVAL_MS = 400;
 const INITIAL_SETTLE_MS = 600;
 const LOGIN_SETTLE_MS = 2_500;
+const LOGIN_VERIFY_ATTEMPTS = 12;
+const LOGIN_VERIFY_INTERVAL_MS = 500;
 const POPUP_POLL_ATTEMPTS = 8;
 const POPUP_POLL_INTERVAL_MS = 400;
 const CHECKIN_POLL_ATTEMPTS = 16;
 const CHECKIN_POLL_INTERVAL_MS = 400;
-const VERIFY_POLL_ATTEMPTS = 6;
-const VERIFY_POLL_INTERVAL_MS = 400;
+const VERIFY_POLL_ATTEMPTS = 10;
+const VERIFY_POLL_INTERVAL_MS = 500;
+// Time to keep the window alive after a confirmed check-in so the site's
+// asynchronous "record my check-in" request can reach the server before the
+// isolated session is torn down.
+const POST_CHECKIN_SETTLE_MS = 4_000;
+
+// Text shown by the sites when a daily check-in has registered (or was already
+// registered earlier today). Matched case-insensitively against page text.
+const SUCCESS_TEXT = [
+  'congratulation',
+  'you have earned',
+  'token today',
+  'checked in',
+  'check-in complete',
+  'check in complete',
+  'already checked',
+  'come back tomorrow',
+  'see you tomorrow',
+];
 
 // Built-in fallbacks appended after the user-configured selectors so the flow
 // keeps working even when a site's markup differs from the stored defaults.
@@ -166,6 +191,13 @@ async function performCheckin(
   await abortableDelay(LOGIN_SETTLE_MS, context.signal);
   ensureNotAborted(context.signal);
 
+  const loggedIn = await waitForLogin(window, context, passwordSelectors);
+  if (!loggedIn) {
+    return failure(
+      'Login did not complete — the login form is still showing. Check the saved username and password for this site.',
+    );
+  }
+
   context.reportStage('checking-in', `Opening the daily check-in page for ${context.siteName}…`);
   try {
     await withTimeout(window.loadURL(context.checkinUrl), NAVIGATION_TIMEOUT_MS, window);
@@ -185,16 +217,50 @@ async function performCheckin(
     context,
   );
   if (!checkinClicked) {
+    // The button may be absent because today's check-in is already done. Treat
+    // an existing "already checked in" confirmation as success; otherwise fail.
+    const already = await hasSuccessConfirmation(window, context, 1);
+    if (already) {
+      return { status: 'success', message: `${context.siteName} was already checked in today.` };
+    }
     return failure('The check-in button was not found. It may already be complete for today.');
   }
 
   context.reportStage('verifying', `Confirming the check-in for ${context.siteName}…`);
   const verified = await verifyCheckin(window, context);
+
+  // Keep the window open briefly so the site's asynchronous request that records
+  // the check-in can reach the server before the session is destroyed.
+  await abortableDelay(POST_CHECKIN_SETTLE_MS, context.signal);
+
   if (!verified) {
-    return failure('The check-in was triggered but could not be confirmed.');
+    return failure(
+      'The check-in button was clicked but no confirmation appeared, so it may not have registered.',
+    );
   }
 
   return { status: 'success', message: `Checked in to ${context.siteName}.` };
+}
+
+async function waitForLogin(
+  window: BrowserWindow,
+  context: CheckinRunnerContext,
+  passwordSelectors: string[],
+): Promise<boolean> {
+  const loginPath = pathnameOf(context.loginUrl);
+
+  for (let attempt = 0; attempt < LOGIN_VERIFY_ATTEMPTS; attempt += 1) {
+    ensureNotAborted(context.signal);
+
+    const current = currentUrl(window);
+    if (current && pathnameOf(current) !== loginPath) return true;
+
+    const formPresent = await execute<ExistsResult>(window, buildExistsScript(passwordSelectors));
+    if (formPresent && !formPresent.found) return true;
+
+    await abortableDelay(LOGIN_VERIFY_INTERVAL_MS, context.signal);
+  }
+  return false;
 }
 
 async function dismissPopup(
@@ -221,17 +287,42 @@ async function verifyCheckin(
   context: CheckinRunnerContext,
 ): Promise<boolean> {
   const successSelector = context.selectors.successSelector.trim();
-  if (!successSelector) {
+  for (let attempt = 0; attempt < VERIFY_POLL_ATTEMPTS; attempt += 1) {
+    ensureNotAborted(context.signal);
+
+    if (successSelector) {
+      const found = await execute<ExistsResult>(window, buildExistsScript([successSelector]));
+      if (found?.found) return true;
+    }
+
+    const confirmation = await execute<ExistsResult>(window, buildTextIncludesScript(SUCCESS_TEXT));
+    if (confirmation?.found) return true;
+
     await abortableDelay(VERIFY_POLL_INTERVAL_MS, context.signal);
-    return true;
   }
-  return pollForElement(
-    window,
-    [successSelector],
-    VERIFY_POLL_ATTEMPTS,
-    VERIFY_POLL_INTERVAL_MS,
-    context.signal,
-  );
+  return false;
+}
+
+async function hasSuccessConfirmation(
+  window: BrowserWindow,
+  context: CheckinRunnerContext,
+  attempts: number,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    ensureNotAborted(context.signal);
+    const confirmation = await execute<ExistsResult>(window, buildTextIncludesScript(SUCCESS_TEXT));
+    if (confirmation?.found) return true;
+    if (attempt < attempts - 1) await abortableDelay(VERIFY_POLL_INTERVAL_MS, context.signal);
+  }
+  return false;
+}
+
+function pathnameOf(value: string): string {
+  try {
+    return new URL(value).pathname.replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
 }
 
 async function pollForElement(

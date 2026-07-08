@@ -93,3 +93,17 @@ export function buildExistsScript(selectors: string[]): string {
     return { found: !!pick(${json(selectors)}) };
   })()`;
 }
+
+/**
+ * Builds an in-page script reporting whether the visible page text contains any
+ * of the given (lower-cased) phrases. Used to confirm a real check-in
+ * confirmation ("Congratulations… you have earned…") rather than assuming a
+ * click succeeded.
+ */
+export function buildTextIncludesScript(needles: string[]): string {
+  return `(() => {
+    const text = (document.body ? document.body.innerText || '' : '').toLowerCase();
+    const needles = ${json(needles)};
+    return { found: needles.some((needle) => text.includes(needle)) };
+  })()`;
+}

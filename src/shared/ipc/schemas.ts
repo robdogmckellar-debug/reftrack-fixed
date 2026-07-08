@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { isValidIsoDate } from '../date/iso-date';
+import { isValidHotkeyKey } from '../hotkeys/bindings';
 
 export const EmptyRequestSchema = z.undefined();
 
@@ -61,11 +62,41 @@ export const SetImageCleanerHotkeyRequestSchema = z
   .object({ hotkey: z.string().trim().min(1).max(120).nullable() })
   .strict();
 
+export const SetHotkeysRequestSchema = z
+  .object({
+    enabled: z.boolean(),
+    bindings: z
+      .array(
+        z
+          .object({
+            siteId: EntityIdSchema,
+            key: z
+              .string()
+              .refine(
+                (value) => value === '' || isValidHotkeyKey(value),
+                'Expected a supported hotkey key',
+              ),
+          })
+          .strict(),
+      )
+      .max(1000),
+  })
+  .strict();
+
+const TaskSiteCheckinSchema = z
+  .object({
+    enabled: z.boolean(),
+    loginPath: z.string().max(2048).optional(),
+    checkinPath: z.string().max(2048).optional(),
+  })
+  .strict();
+
 const TaskSiteSchema = z
   .object({
     id: EntityIdSchema,
     name: z.string().trim().min(1).max(100),
     url: OptionalCredentialFreeHttpsUrlSchema,
+    checkin: TaskSiteCheckinSchema.optional(),
   })
   .strict();
 
@@ -126,6 +157,24 @@ export const ImporterStartRequestSchema = z
   .strict();
 
 export const ImporterCancelRequestSchema = z.object({ jobId: EntityIdSchema }).strict();
+
+export const CheckinStartRequestSchema = z
+  .object({ taskSiteId: EntityIdSchema.nullable() })
+  .strict();
+
+export const CheckinCancelRequestSchema = z.object({ runId: EntityIdSchema }).strict();
+
+export const CheckinSaveCredentialsRequestSchema = z
+  .object({
+    taskSiteId: EntityIdSchema,
+    username: z.string().min(1).max(4096),
+    password: z.string().min(1).max(4096),
+  })
+  .strict();
+
+export const CheckinDeleteCredentialsRequestSchema = z
+  .object({ taskSiteId: EntityIdSchema })
+  .strict();
 
 function isOptionalCredentialFreeHttpsUrl(value: string): boolean {
   if (!value) return true;

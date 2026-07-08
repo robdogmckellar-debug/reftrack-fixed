@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { IPC_CHANNELS } from '../../src/shared/ipc/channels';
 import {
+  CheckinSaveCredentialsRequestSchema,
+  CheckinStartRequestSchema,
   CopyLinkRequestSchema,
   SiteUpsertRequestSchema,
+  TaskCategoryUpsertRequestSchema,
   TaskCompletionRequestSchema,
 } from '../../src/shared/ipc/schemas';
 import { validateExternalUrl } from '../../src/main/ipc/url-policy';
@@ -20,6 +23,46 @@ describe('typed IPC contract', () => {
     expect(channels).not.toContain('image-cleaner:clear-legacy');
     expect(channels).toContain('image-cleaner:completed');
     expect(channels).toContain('image-cleaner:run');
+    expect(channels).toContain('checkin:start');
+    expect(channels).toContain('checkin:cancel');
+    expect(channels).toContain('checkin:save-credentials');
+    expect(channels).toContain('checkin:delete-credentials');
+    expect(channels).toContain('checkin:progress');
+    expect(channels).toContain('checkin:completed');
+  });
+
+  it('validates auto check-in requests and accepts an optional per-site check-in config', () => {
+    expect(CheckinStartRequestSchema.parse({ taskSiteId: null }).taskSiteId).toBeNull();
+    expect(CheckinStartRequestSchema.parse({ taskSiteId: 'site-a' }).taskSiteId).toBe('site-a');
+    expect(() => CheckinStartRequestSchema.parse({ taskSiteId: null, extra: 1 })).toThrow();
+
+    expect(() =>
+      CheckinSaveCredentialsRequestSchema.parse({ taskSiteId: 'site-a', username: 'a' }),
+    ).toThrow();
+    expect(
+      CheckinSaveCredentialsRequestSchema.parse({
+        taskSiteId: 'site-a',
+        username: 'user',
+        password: 'pass',
+      }).password,
+    ).toBe('pass');
+
+    const category = TaskCategoryUpsertRequestSchema.parse({
+      category: {
+        id: 'cat',
+        name: 'Category',
+        colour: 'teal',
+        sites: [
+          {
+            id: 'site-a',
+            name: 'Alpha',
+            url: 'https://alpha.example/ref',
+            checkin: { enabled: true },
+          },
+        ],
+      },
+    });
+    expect(category.category.sites[0]?.checkin?.enabled).toBe(true);
   });
 
   it('strictly rejects unknown or malformed command payloads', () => {

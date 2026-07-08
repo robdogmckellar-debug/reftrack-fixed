@@ -405,3 +405,25 @@ export function ChevronDownIcon(props: IconProps): JSX.Element {
     </IconBase>
   );
 }
+
+export function MinimizeIcon(props: IconProps): JSX.Element {
+  return (
+    <IconBase {...props}>
+      <path d="M6 18h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+    </IconBase>
+  );
+}
+
+export function KeyboardIcon(props: IconProps): JSX.Element {
+  return (
+    <IconBase {...props}>
+      <rect x="2.5" y="6" width="19" height="12" rx="2" stroke="currentColor" stroke-width="1.8" />
+      <path
+        d="M6 9.5h.01M9 9.5h.01M12 9.5h.01M15 9.5h.01M18 9.5h.01M6 12.5h.01M9 12.5h.01M12 12.5h.01M15 12.5h.01M18 12.5h.01M8 15.5h8"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+      />
+    </IconBase>
+  );
+}

@@ -15,6 +15,7 @@ import { Button } from '../design-system/Button';
 import { Spinner } from '../design-system/Spinner';
 import { StatusMessage } from '../design-system/StatusMessage';
 import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
+import { performCopy } from '../screens/dashboard/copy-action';
 import { DailyTasksScreen } from '../screens/daily-tasks/DailyTasksScreen';
 import { SiteEditorScreen } from '../screens/site-editor/SiteEditorScreen';
 import { StatisticsScreen } from '../screens/statistics/StatisticsScreen';
@@ -55,6 +56,12 @@ export function App(): JSX.Element {
 
   useEffect(() => {
     void bootstrapRenderer();
+  }, []);
+
+  useEffect(() => {
+    return window.reftrack.hotkeys.onTriggered(({ siteId }) => {
+      void performCopy(siteId);
+    });
   }, []);
 
   if (status === 'idle' || status === 'loading') return <LoadingScreen />;

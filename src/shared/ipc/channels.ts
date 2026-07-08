@@ -10,6 +10,9 @@ export const IPC_CHANNELS = {
   settingsSetImageCleanerEnabled: 'settings:set-image-cleaner-enabled',
   settingsSelectImageCleanerFolder: 'settings:select-image-cleaner-folder',
   settingsSetImageCleanerHotkey: 'settings:set-image-cleaner-hotkey',
+  settingsSetHotkeys: 'settings:set-hotkeys',
+  hotkeyTriggered: 'hotkeys:triggered',
+  windowMinimize: 'window:minimize',
   imageCleanerRun: 'image-cleaner:run',
   imageCleanerCompleted: 'image-cleaner:completed',
   tasksUpsertCategory: 'tasks:upsert-category',
@@ -22,6 +25,13 @@ export const IPC_CHANNELS = {
   importerCancel: 'importer:cancel',
   importerProgress: 'importer:progress',
   importerCompleted: 'importer:completed',
+  checkinStart: 'checkin:start',
+  checkinCancel: 'checkin:cancel',
+  checkinSaveCredentials: 'checkin:save-credentials',
+  checkinDeleteCredentials: 'checkin:delete-credentials',
+  checkinCredentialStatus: 'checkin:credential-status',
+  checkinProgress: 'checkin:progress',
+  checkinCompleted: 'checkin:completed',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

@@ -6,7 +6,7 @@ import type {
   RendererTaskSite,
 } from '../../../shared/view-model/renderer-snapshot';
 import { publishSnapshot, rendererSnapshot } from '../../app/store';
-import { ImportIcon, PlusIcon, TasksIcon, TrashIcon } from '../../components/icons';
+import { CheckIcon, ImportIcon, PlusIcon, TasksIcon, TrashIcon } from '../../components/icons';
 import { Button } from '../../design-system/Button';
 import { Dialog } from '../../design-system/Dialog';
 import { ToggleSwitch } from '../../design-system/ToggleSwitch';
@@ -14,6 +14,7 @@ import { errorMessage, unwrapIpcResult } from '../../lib/ipc-result';
 import {
   categoryProgress,
   categoryStatus,
+  countCheckinSites,
   globalTaskProgress,
   localTaskDateKey,
   sortTaskCategories,
@@ -41,6 +42,10 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
   const snapshot = rendererSnapshot.value;
   const categories = snapshot?.tasks.categories ?? [];
   const dailyState = snapshot?.tasksDailyState ?? {};
+  const checkinState = snapshot?.checkinDailyState ?? {};
+  const checkinSiteCount = useMemo(() => countCheckinSites(categories), [categories]);
+  const [checkinRunId, setCheckinRunId] = useState<string | null>(null);
+  const [checkinStatus, setCheckinStatus] = useState<string | null>(null);
   const [today, setToday] = useState(() => localTaskDateKey());
   const [autoSort, setAutoSort] = useState(true);
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<ReadonlySet<string>>(new Set());
@@ -82,6 +87,54 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
     },
     [],
   );
+
+  useEffect(() => {
+    const offProgress = window.reftrack.checkin.onProgress((event) => {
+      setCheckinStatus(
+        event.total > 1 ? `(${event.index}/${event.total}) ${event.message}` : event.message,
+      );
+    });
+    const offCompleted = window.reftrack.checkin.onCompleted((event) => {
+      publishSnapshot(event.snapshot);
+      setCheckinRunId(null);
+      setCheckinStatus(null);
+
+      const success = event.results.filter((result) => result.status === 'success').length;
+      const failed = event.results.filter((result) => result.status === 'failed').length;
+      const skipped = event.results.filter((result) => result.status === 'skipped').length;
+      const detail = [
+        failed ? `${failed} failed` : null,
+        skipped ? `${skipped} skipped (no credentials)` : null,
+      ]
+        .filter(Boolean)
+        .join(', ');
+
+      if (event.cancelled) {
+        showFeedback(
+          'info',
+          'Check-in cancelled',
+          `${success} site${success === 1 ? '' : 's'} completed before cancelling.`,
+        );
+      } else if (failed === 0 && skipped === 0) {
+        showFeedback(
+          'success',
+          `Checked in ${success} site${success === 1 ? '' : 's'}`,
+          'Every automatic check-in completed successfully.',
+        );
+      } else {
+        showFeedback(
+          failed > 0 ? 'danger' : 'info',
+          `Checked in ${success} of ${event.results.length} site${event.results.length === 1 ? '' : 's'}`,
+          detail || undefined,
+        );
+      }
+    });
+
+    return () => {
+      offProgress();
+      offCompleted();
+    };
+  }, [showFeedback]);
 
   useEffect(() => {
     if (!active) return;
@@ -285,6 +338,31 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
     }
   };
 
+  const startCheckin = async (taskSiteId: string | null): Promise<void> => {
+    if (checkinRunId) return;
+    try {
+      const response = unwrapIpcResult(await window.reftrack.checkin.start({ taskSiteId }));
+      setCheckinRunId(response.runId);
+      setCheckinStatus(
+        taskSiteId
+          ? 'Starting automatic check-in…'
+          : `Checking in ${response.targetCount} site${response.targetCount === 1 ? '' : 's'}…`,
+      );
+    } catch (error) {
+      showFeedback(
+        'danger',
+        'Automatic check-in could not start',
+        errorMessage(error, 'RefTrack could not start the automatic check-in.'),
+      );
+    }
+  };
+
+  const cancelCheckin = (): void => {
+    if (!checkinRunId) return;
+    void window.reftrack.checkin.cancel({ runId: checkinRunId });
+    setCheckinStatus('Cancelling…');
+  };
+
   const openNewCategory = (): void => {
     setEditorCategory(null);
     setEditorOpen(true);
@@ -394,6 +472,22 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
         </div>
 
         <div class="daily-tasks-header__actions">
+          {checkinSiteCount > 0 ? (
+            checkinRunId ? (
+              <Button size="small" variant="danger" onClick={cancelCheckin}>
+                Cancel check-in
+              </Button>
+            ) : (
+              <Button
+                size="small"
+                variant="secondary"
+                leadingIcon={<CheckIcon size={16} />}
+                onClick={() => void startCheckin(null)}
+              >
+                Check in all sites
+              </Button>
+            )
+          ) : null}
           <Button
             size="small"
             variant="secondary"
@@ -449,6 +543,13 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
       </section>
 
       <div class="daily-tasks-body">
+        {checkinStatus ? (
+          <div class="daily-tasks-checkin-progress" role="status" aria-live="polite">
+            <span class="ui-spinner" aria-hidden="true" />
+            <span>{checkinStatus}</span>
+          </div>
+        ) : null}
+
         {feedback ? (
           <div
             key={feedback.id}
@@ -473,14 +574,17 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
                 key={category.id}
                 category={category}
                 dailyState={dailyState}
+                checkinState={checkinState}
                 date={today}
                 expanded={expandedCategoryIds.has(category.id)}
                 pendingSiteIds={pendingSiteIds}
                 openRemainingPending={pendingOpenCategoryIds.has(category.id)}
+                checkinRunning={Boolean(checkinRunId)}
                 onToggleExpanded={() => toggleExpanded(category.id)}
                 onVisit={(site) => void visitSite(category, site)}
                 onSetDone={(site, done) => void setCompletion(category, site, done)}
                 onOpenRemaining={() => void openRemaining(category)}
+                onCheckin={(site) => void startCheckin(site.id)}
                 onEdit={() => openEditCategory(category)}
                 onDelete={() => setDeleteCategory(category)}
               />

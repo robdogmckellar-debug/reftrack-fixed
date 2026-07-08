@@ -1,6 +1,8 @@
 import type { JSX } from 'preact';
 
 import type {
+  RendererCheckinDailyState,
+  RendererCheckinResult,
   RendererTaskCategory,
   RendererTaskDailyState,
   RendererTaskSite,
@@ -10,24 +12,45 @@ import {
   ChevronDownIcon,
   EditIcon,
   ExternalLinkIcon,
+  RefreshIcon,
   TrashIcon,
 } from '../../../components/icons';
 import { Button } from '../../../design-system/Button';
-import { categoryProgress, categoryStatus, taskSiteDone } from '../daily-tasks-model';
+import {
+  categoryProgress,
+  categoryStatus,
+  checkinDailyResult,
+  taskSiteDone,
+} from '../daily-tasks-model';
 
 interface TaskCategoryCardProps {
   category: RendererTaskCategory;
   dailyState: RendererTaskDailyState;
+  checkinState: RendererCheckinDailyState;
   date: string;
   expanded: boolean;
   pendingSiteIds: ReadonlySet<string>;
   openRemainingPending: boolean;
+  checkinRunning: boolean;
   onToggleExpanded(): void;
   onVisit(site: RendererTaskSite): void;
   onSetDone(site: RendererTaskSite, done: boolean): void;
   onOpenRemaining(): void;
+  onCheckin(site: RendererTaskSite): void;
   onEdit(): void;
   onDelete(): void;
+}
+
+function checkinStatusLabel(result: RendererCheckinResult | null): string {
+  if (!result) return 'Not checked in today';
+  switch (result.status) {
+    case 'success':
+      return 'Checked in today';
+    case 'failed':
+      return result.message || 'Last check-in failed';
+    case 'skipped':
+      return result.message || 'Check-in skipped';
+  }
 }
 
 function statusLabel(status: ReturnType<typeof categoryStatus>): string {
@@ -55,14 +78,17 @@ function siteHost(url: string): string | null {
 export function TaskCategoryCard({
   category,
   dailyState,
+  checkinState,
   date,
   expanded,
   pendingSiteIds,
   openRemainingPending,
+  checkinRunning,
   onToggleExpanded,
   onVisit,
   onSetDone,
   onOpenRemaining,
+  onCheckin,
   onEdit,
   onDelete,
 }: TaskCategoryCardProps): JSX.Element {
@@ -187,6 +213,26 @@ export function TaskCategoryCard({
                   >
                     {done ? 'Open again' : 'Visit'}
                   </Button>
+
+                  {site.checkin?.enabled ? (
+                    <div class="task-site-checkin">
+                      <span
+                        class={`task-site-checkin__status is-${checkinDailyResult(checkinState, date, site.id)?.status ?? 'idle'}`}
+                      >
+                        {checkinStatusLabel(checkinDailyResult(checkinState, date, site.id))}
+                      </span>
+                      <Button
+                        size="small"
+                        variant="quiet"
+                        disabled={checkinRunning || !site.url}
+                        leadingIcon={<RefreshIcon size={15} />}
+                        aria-label={`Run automatic check-in for ${site.name}`}
+                        onClick={() => onCheckin(site)}
+                      >
+                        Check in
+                      </Button>
+                    </div>
+                  ) : null}
                 </li>
               );
             })}

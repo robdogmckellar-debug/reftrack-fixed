@@ -1,4 +1,5 @@
 import { APP_STATE_SCHEMA_VERSION, type AppStateV1 } from './app-state';
+import { DEFAULT_CHECKIN_SETTINGS } from './entities/settings';
 
 const DEFAULT_STATE: AppStateV1 = {
   schemaVersion: APP_STATE_SCHEMA_VERSION,
@@ -104,9 +105,15 @@ const DEFAULT_STATE: AppStateV1 = {
       folderPath: null,
       hotkey: null,
     },
+    checkin: { ...DEFAULT_CHECKIN_SETTINGS },
+    hotkeys: {
+      enabled: true,
+      bindings: [],
+    },
   },
   taskCategories: [],
   taskDailyRecords: {},
+  checkinDailyRecords: {},
 };
 
 export function createDefaultAppState(): AppStateV1 {

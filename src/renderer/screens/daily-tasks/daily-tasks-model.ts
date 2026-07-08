@@ -1,4 +1,6 @@
 import type {
+  RendererCheckinDailyState,
+  RendererCheckinResult,
   RendererTaskCategory,
   RendererTaskDailyState,
   RendererTaskSite,
@@ -153,6 +155,8 @@ export function validateTaskCategory(
     if (siteUrl.length > 2048) siteErrors.url = 'Use a URL shorter than 2,048 characters.';
     else if (siteUrl && !isCredentialFreeHttpsUrl(siteUrl)) {
       siteErrors.url = 'Use a complete credential-free HTTPS URL.';
+    } else if (!siteUrl && site.checkin?.enabled) {
+      siteErrors.url = 'A HTTPS URL is required for automatic check-in.';
     }
 
     if (siteErrors.name || siteErrors.url) errors.sites[site.id] = siteErrors;
@@ -172,5 +176,25 @@ export function activeTaskSites(sites: readonly RendererTaskSite[]): RendererTas
       id: site.id,
       name: site.name.trim(),
       url: normaliseTaskUrl(site.url),
+      ...(site.checkin?.enabled ? { checkin: { enabled: true } } : {}),
     }));
+}
+
+export function checkinDailyResult(
+  checkinState: RendererCheckinDailyState,
+  date: string,
+  siteId: string,
+): RendererCheckinResult | null {
+  return checkinState[date]?.[siteId] ?? null;
+}
+
+export function categoryHasCheckin(category: RendererTaskCategory): boolean {
+  return category.sites.some((site) => site.checkin?.enabled);
+}
+
+export function countCheckinSites(categories: readonly RendererTaskCategory[]): number {
+  return categories.reduce(
+    (total, category) => total + category.sites.filter((site) => site.checkin?.enabled).length,
+    0,
+  );
 }

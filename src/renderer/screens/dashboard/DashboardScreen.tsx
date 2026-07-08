@@ -10,12 +10,11 @@ import {
   activityClearPending,
   dashboardFilter,
   refreshDashboardDate,
-  setCopyPending,
   setSuccessPending,
   siteSignalFor,
   visibleDashboardSiteIds,
 } from './dashboard-store';
-import { buildReferralText } from './link-format';
+import { performCopy } from './copy-action';
 import { ActivityFeed } from './components/ActivityFeed';
 import {
   DashboardToastRegion,
@@ -169,55 +168,38 @@ export function DashboardScreen({ active }: { active: boolean }): JSX.Element {
   }, [addToast]);
 
   const copySite = async (siteId: string): Promise<void> => {
-    const site = siteSignalFor(siteId).peek();
-    if (!site || !site.url) return;
+    const result = await performCopy(siteId);
+    if (result.status === 'skipped') return;
 
-    setCopyPending(siteId, true);
-    const now = new Date();
-    const text = buildReferralText(site, now);
+    if (result.status === 'error') {
+      addToast('danger', 'Copy failed', result.message);
+      return;
+    }
 
-    try {
-      const response = unwrapIpcResult(
-        await window.reftrack.actions.copyLink({
-          siteId,
-          text,
-          occurredAt: now.toISOString(),
-        }),
-      );
-      publishSnapshot(response.snapshot);
-      addToast('copy', `${site.name} copied`, text.length > 84 ? `${text.slice(0, 81)}…` : text);
+    addToast(
+      'copy',
+      `${result.siteName} copied`,
+      result.text.length > 84 ? `${result.text.slice(0, 81)}…` : result.text,
+    );
 
-      void window.reftrack.notifications
-        .showAction({ kind: 'copy', siteName: site.name, amountCents: null })
-        .catch(() => undefined);
-
-      if (response.cleanup.status === 'started') {
-        addToast(
-          'info',
-          'Image cleanup started',
-          'Verified top-level images will move to the Recycle Bin.',
-        );
-      } else if (response.cleanup.status === 'busy') {
-        addToast(
-          'info',
-          'Image cleanup already running',
-          'The existing cleanup will finish in the background.',
-        );
-      } else if (response.cleanup.status === 'not-configured') {
-        addToast(
-          'info',
-          'Image Cleaner needs a folder',
-          'Choose a dedicated screenshots folder in Settings.',
-        );
-      }
-    } catch (error) {
+    if (result.cleanup.status === 'started') {
       addToast(
-        'danger',
-        'Copy failed',
-        errorMessage(error, 'The referral link could not be copied.'),
+        'info',
+        'Image cleanup started',
+        'Verified top-level images will move to the Recycle Bin.',
       );
-    } finally {
-      setCopyPending(siteId, false);
+    } else if (result.cleanup.status === 'busy') {
+      addToast(
+        'info',
+        'Image cleanup already running',
+        'The existing cleanup will finish in the background.',
+      );
+    } else if (result.cleanup.status === 'not-configured') {
+      addToast(
+        'info',
+        'Image Cleaner needs a folder',
+        'Choose a dedicated screenshots folder in Settings.',
+      );
     }
   };
 

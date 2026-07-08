@@ -28,6 +28,9 @@ export function Dialog({
   const titleId = useId();
   const descriptionId = useId();
 
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open || !panelRef.current) return;
     const panel = panelRef.current;
@@ -43,7 +46,7 @@ export function Dialog({
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       trapTabKey(event, panel);
@@ -54,7 +57,11 @@ export function Dialog({
       document.removeEventListener('keydown', handleKeyDown, true);
       if (previousFocus?.isConnected) queueMicrotask(() => previousFocus.focus());
     };
-  }, [initialFocusRef, onClose, open]);
+    // Only run when the dialog opens/closes. `initialFocusRef` is a stable ref
+    // object and `onClose` is read through `onCloseRef`, so neither is listed as
+    // a dependency: doing so would re-run this effect on every parent re-render
+    // (e.g. while typing) and steal focus back to the initial element.
+  }, [open]);
 
   if (!open) return null;
 

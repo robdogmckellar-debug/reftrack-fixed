@@ -275,6 +275,19 @@ export class ApplicationCommandService {
     await this.stateService.update((draft) => {
       const day = (draft.checkinDailyRecords[date] ??= {});
       day[taskSiteId] = result;
+
+      // A successful automatic check-in also satisfies the manual Daily Task,
+      // so mark the owning category's task complete for the same day.
+      if (result.status === 'success') {
+        const category = draft.taskCategories.find((candidate) =>
+          candidate.sites.some((site) => site.id === taskSiteId),
+        );
+        if (category) {
+          const taskDay = (draft.taskDailyRecords[date] ??= {});
+          const categoryState = (taskDay[category.id] ??= {});
+          categoryState[taskSiteId] = true;
+        }
+      }
     });
   }
 

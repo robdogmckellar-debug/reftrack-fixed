@@ -31,6 +31,7 @@ import {
   UndoSuccessRequestSchema,
 } from '../../shared/ipc/schemas';
 import { CheckinCoordinator } from '../checkin/checkin-coordinator';
+import { CheckinScheduler } from '../checkin/checkin-scheduler';
 import { CredentialStore } from '../checkin/credential-store';
 import type { CredentialCrypto } from '../checkin/credential-store';
 import { ImportCoordinator } from '../importer/import-coordinator';
@@ -117,6 +118,18 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
         snapshot: commands.getRendererSnapshot(),
       }),
   });
+
+  const checkinScheduler = new CheckinScheduler({
+    run: () => {
+      try {
+        checkin.start({ taskSiteId: null });
+      } catch {
+        // No enabled sites or a run already in progress — nothing to do today.
+      }
+    },
+    onError: (error) => console.error('[RefTrack] Scheduled check-in failed to start:', error),
+  });
+  checkinScheduler.start();
 
   const pruneCheckinCredentials = async (): Promise<void> => {
     const state = options.stateService.getSnapshot();
@@ -329,6 +342,7 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
   return {
     dispose: () => {
       importer.dispose();
+      checkinScheduler.dispose();
       checkin.dispose();
       for (const channel of Object.values(IPC_CHANNELS)) ipcMain.removeHandler(channel);
     },

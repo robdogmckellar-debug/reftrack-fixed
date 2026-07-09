@@ -110,4 +110,50 @@ describe('typed application commands', () => {
       'category-a': {},
     });
   });
+
+  it('marks the owning Daily Task complete when a check-in succeeds', async () => {
+    const { commands, state } = await createCommands();
+    await commands.upsertTaskCategory({
+      id: 'category-a',
+      name: 'Category A',
+      colour: 'teal',
+      sites: [
+        { id: 'site-a', name: 'A', url: 'https://a.example', checkin: { enabled: true } },
+        { id: 'site-b', name: 'B', url: 'https://b.example', checkin: { enabled: true } },
+      ],
+    });
+
+    await commands.recordCheckinResult('2026-06-30', 'site-a', {
+      status: 'success',
+      at: '2026-06-30T00:10:00.000Z',
+    });
+
+    const snapshot = state.getSnapshot();
+    expect(snapshot.checkinDailyRecords['2026-06-30']?.['site-a']?.status).toBe('success');
+    expect(snapshot.taskDailyRecords['2026-06-30']?.['category-a']?.['site-a']).toBe(true);
+    expect(snapshot.taskDailyRecords['2026-06-30']?.['category-a']?.['site-b']).toBeUndefined();
+  });
+
+  it('does not complete the Daily Task when a check-in fails or is skipped', async () => {
+    const { commands, state } = await createCommands();
+    await commands.upsertTaskCategory({
+      id: 'category-a',
+      name: 'Category A',
+      colour: 'teal',
+      sites: [{ id: 'site-a', name: 'A', url: 'https://a.example', checkin: { enabled: true } }],
+    });
+
+    await commands.recordCheckinResult('2026-06-30', 'site-a', {
+      status: 'failed',
+      at: '2026-06-30T00:10:00.000Z',
+    });
+    await commands.recordCheckinResult('2026-06-30', 'site-a', {
+      status: 'skipped',
+      at: '2026-06-30T00:10:00.000Z',
+    });
+
+    expect(
+      state.getSnapshot().taskDailyRecords['2026-06-30']?.['category-a']?.['site-a'],
+    ).toBeUndefined();
+  });
 });

@@ -46,6 +46,11 @@ export interface RendererSettings {
   folderClearEnabled: boolean;
   folderClearPath: string | null;
   folderClearHotkey?: string | null;
+  checkinSchedule: {
+    enabled: boolean;
+    time: string;
+    lastRunDate: string | null;
+  };
   hotkeys: RendererHotkeySettings;
 }
 
@@ -60,6 +65,7 @@ export interface RendererTaskSiteCheckin {
 
 export interface RendererTaskSite {
   id: string;
+  sourceSiteId?: string | undefined;
   name: string;
   url: string;
   checkin?: RendererTaskSiteCheckin | undefined;

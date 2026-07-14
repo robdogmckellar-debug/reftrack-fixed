@@ -101,11 +101,14 @@ export class CheckinCoordinator {
   private collectTargets(taskSiteId: string | null): CheckinTarget[] {
     const state = this.options.getState();
     const targets: CheckinTarget[] = [];
+    const seenSiteIds = new Set<string>();
 
     for (const category of state.taskCategories) {
       for (const site of category.sites) {
         if (!site.checkin?.enabled) continue;
         if (taskSiteId !== null && site.id !== taskSiteId) continue;
+        if (seenSiteIds.has(site.id)) continue;
+        seenSiteIds.add(site.id);
         targets.push({
           taskSiteId: site.id,
           siteName: site.name,

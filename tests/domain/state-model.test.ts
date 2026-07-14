@@ -47,4 +47,24 @@ describe('canonical state model', () => {
     duplicate.sites.push({ ...duplicate.sites[0]! });
     expect(() => parseAppState(duplicate)).toThrow(/Duplicate site ID/);
   });
+
+  it('loads saved state containing retired Auto-Share fields and strips them', () => {
+    const state = createDefaultAppState();
+    const parsed = parseAppState({
+      ...state,
+      sites: state.sites.map((site, index) =>
+        index === 0 ? { ...site, autoShareEnabled: true, groupsPerRun: 6 } : site,
+      ),
+      settings: {
+        ...state.settings,
+        autoShare: { defaultEnabled: true },
+      },
+      autoShareRotation: { groupCursor: 4, sitesSinceReset: 2 },
+    });
+
+    expect(parsed.sites[0]).not.toHaveProperty('autoShareEnabled');
+    expect(parsed.sites[0]).not.toHaveProperty('groupsPerRun');
+    expect(parsed.settings).not.toHaveProperty('autoShare');
+    expect(parsed).not.toHaveProperty('autoShareRotation');
+  });
 });

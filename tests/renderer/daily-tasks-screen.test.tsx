@@ -45,6 +45,7 @@ interface ApiMocks {
   setCompletion: ReturnType<typeof vi.fn>;
   setCompletions: ReturnType<typeof vi.fn>;
   upsertCategory: ReturnType<typeof vi.fn>;
+  addSitesToCategories: ReturnType<typeof vi.fn>;
   deleteCategory: ReturnType<typeof vi.fn>;
   openExternal: ReturnType<typeof vi.fn>;
   startImport: ReturnType<typeof vi.fn>;
@@ -59,6 +60,7 @@ function installApi(): ApiMocks {
   const setCompletion = vi.fn();
   const setCompletions = vi.fn();
   const upsertCategory = vi.fn();
+  const addSitesToCategories = vi.fn();
   const deleteCategory = vi.fn();
   const openExternal = vi.fn().mockResolvedValue({ ok: true, data: { opened: true } });
   const startImport = vi.fn().mockResolvedValue({ ok: true, data: { jobId: 'job-1' } });
@@ -72,7 +74,13 @@ function installApi(): ApiMocks {
     actions: { copyLink: vi.fn(), recordSuccess: vi.fn(), undoSuccess: vi.fn() },
     settings: { setImageCleanerEnabled: vi.fn(), selectImageCleanerFolder: vi.fn() },
     imageCleaner: { onCompleted: vi.fn(() => () => undefined) },
-    tasks: { upsertCategory, deleteCategory, setCompletion, setCompletions },
+    tasks: {
+      upsertCategory,
+      addSitesToCategories,
+      deleteCategory,
+      setCompletion,
+      setCompletions,
+    },
     external: { open: openExternal },
     notifications: { showAction: vi.fn() },
     importer: {
@@ -107,6 +115,7 @@ function installApi(): ApiMocks {
     setCompletion,
     setCompletions,
     upsertCategory,
+    addSitesToCategories,
     deleteCategory,
     openExternal,
     startImport,
@@ -217,6 +226,76 @@ describe('DailyTasksScreen', () => {
         { categoryId: 'cat-a', siteId: 'site-a', done: true },
         { categoryId: 'cat-a', siteId: 'site-b', done: true },
       ],
+    });
+  });
+
+  it('selects multiple Daily Tasks sites and opens them in one bulk action', async () => {
+    const mocks = installApi();
+    const next = createSnapshot({
+      revision: 24,
+      tasksDailyState: {
+        [localTaskDateKey()]: { 'cat-a': { 'site-a': true, 'site-b': true } },
+      },
+    });
+    mocks.setCompletions.mockResolvedValue({ ok: true, data: { snapshot: next } });
+
+    publishSnapshot(createSnapshot());
+    render(<DailyTasksScreen active />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    await waitFor(() => screen.getByRole('checkbox', { name: 'Select Alpha' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Alpha' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Beta' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open sites' }));
+
+    await waitFor(() => expect(mocks.setCompletions).toHaveBeenCalledTimes(1));
+    expect(mocks.openExternal).toHaveBeenCalledTimes(2);
+    expect(mocks.setCompletions).toHaveBeenCalledWith({
+      date: localTaskDateKey(),
+      items: [
+        { categoryId: 'cat-a', siteId: 'site-a', done: true },
+        { categoryId: 'cat-a', siteId: 'site-b', done: true },
+      ],
+    });
+  });
+
+  it('adds selected Daily Tasks sites to a new category', async () => {
+    const mocks = installApi();
+    const initial = createSnapshot();
+    mocks.addSitesToCategories.mockImplementation(async (request) => ({
+      ok: true,
+      data: {
+        categoryIds: [request.newCategory.id],
+        snapshot: {
+          ...initial,
+          revision: 24,
+          tasks: {
+            categories: [
+              ...initial.tasks.categories,
+              { ...request.newCategory, sites: request.sites },
+            ],
+          },
+        },
+      },
+    }));
+
+    publishSnapshot(initial);
+    render(<DailyTasksScreen active />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    await waitFor(() => screen.getByRole('checkbox', { name: 'Select Alpha' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Alpha' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to category' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Add 1 site to categories' });
+    fireEvent.input(within(dialog).getByLabelText('New category'), {
+      target: { value: 'Evening' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add to categories' }));
+
+    await waitFor(() => expect(mocks.addSitesToCategories).toHaveBeenCalledTimes(1));
+    expect(mocks.addSitesToCategories.mock.calls[0]?.[0]).toMatchObject({
+      sites: [{ id: 'site-a', name: 'Alpha' }],
+      categoryIds: [],
+      newCategory: { name: 'Evening' },
     });
   });
 

@@ -163,6 +163,10 @@
   grid-row: span 2;
 }
 
+.settings-panel--checkin > .settings-feedback {
+  margin: var(--space-4) var(--space-5) 0;
+}
+
 .settings-panel__header {
   display: flex;
   align-items: flex-start;
@@ -255,6 +259,58 @@
   border-radius: var(--radius-md);
   background: var(--color-surface-input);
   padding: var(--space-4);
+}
+
+.settings-checkin-schedule {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.settings-checkin-time {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+}
+
+.settings-checkin-time > span {
+  display: grid;
+  gap: 2px;
+}
+
+.settings-checkin-time strong {
+  color: var(--color-text);
+  font-size: var(--font-size-2);
+}
+
+.settings-checkin-time small,
+.settings-checkin-summary {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-1);
+}
+
+.settings-checkin-time input {
+  width: 8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-input);
+  padding: 0.5rem 0.65rem;
+  color: var(--color-text);
+  color-scheme: dark;
+  font: inherit;
+}
+
+.settings-checkin-time input:disabled {
+  opacity: 0.58;
+}
+
+.settings-checkin-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
 }
 
 .settings-hotkey__copy {
@@ -988,4 +1044,48 @@
 .settings-hotkeys-footer {
   display: flex;
   justify-content: flex-end;
+}
+
+.settings-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.settings-field--full {
+  grid-column: 1 / -1;
+}
+
+.settings-field__label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.settings-field__help {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.settings-field input,
+.settings-field select,
+.settings-field textarea {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-input);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.settings-field textarea {
+  resize: vertical;
+  min-height: 6rem;
 }

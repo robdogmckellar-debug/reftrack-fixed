@@ -35,10 +35,12 @@ const reftrackApi: RefTrackApi = {
       ipcRenderer.invoke(IPC_CHANNELS.settingsSelectImageCleanerFolder),
     setImageCleanerHotkey: (request) =>
       ipcRenderer.invoke(IPC_CHANNELS.settingsSetImageCleanerHotkey, request),
+    setCheckinSchedule: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.settingsSetCheckinSchedule, request),
     setHotkeys: (request) => ipcRenderer.invoke(IPC_CHANNELS.settingsSetHotkeys, request),
   },
   window: {
-    minimize: () => ipcRenderer.invoke(IPC_CHANNELS.windowMinimize),
+    hideToTray: () => ipcRenderer.invoke(IPC_CHANNELS.windowHideToTray),
   },
   hotkeys: {
     onTriggered: (listener) => {
@@ -64,6 +66,8 @@ const reftrackApi: RefTrackApi = {
   },
   tasks: {
     upsertCategory: (request) => ipcRenderer.invoke(IPC_CHANNELS.tasksUpsertCategory, request),
+    addSitesToCategories: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tasksAddSitesToCategories, request),
     deleteCategory: (request) => ipcRenderer.invoke(IPC_CHANNELS.tasksDeleteCategory, request),
     setCompletion: (request) => ipcRenderer.invoke(IPC_CHANNELS.tasksSetCompletion, request),
     setCompletions: (request) => ipcRenderer.invoke(IPC_CHANNELS.tasksSetCompletions, request),

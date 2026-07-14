@@ -54,6 +54,19 @@ describe('renderer snapshot adapter', () => {
     });
   });
 
+  it('maps the daily check-in schedule into renderer settings', () => {
+    const state = createDefaultAppState();
+    state.settings.checkin.scheduleEnabled = true;
+    state.settings.checkin.scheduleTime = '07:45';
+    state.settings.checkin.lastScheduledRunDate = '2026-07-14';
+
+    expect(toRendererSnapshot(state).settings.checkinSchedule).toEqual({
+      enabled: true,
+      time: '07:45',
+      lastRunDate: '2026-07-14',
+    });
+  });
+
   it('deep-clones task collections so canonical state is not shared with the snapshot', () => {
     const state = createDefaultAppState();
     state.taskCategories = [{ id: 'category-a', name: 'Category A', colour: 'teal', sites: [] }];

@@ -13,12 +13,23 @@ import {
 
 interface SiteCardProps {
   siteId: string;
+  selectionMode: boolean;
+  selected: boolean;
   onCopy(siteId: string): void;
   onSuccess(siteId: string): void;
   onOpen(url: string): void;
+  onToggleSelected(siteId: string, selected: boolean): void;
 }
 
-export function SiteCard({ siteId, onCopy, onSuccess, onOpen }: SiteCardProps): JSX.Element | null {
+export function SiteCard({
+  siteId,
+  selectionMode,
+  selected,
+  onCopy,
+  onSuccess,
+  onOpen,
+  onToggleSelected,
+}: SiteCardProps): JSX.Element | null {
   const site = siteSignalFor(siteId).value;
   const today = dailySignalFor(siteId).value;
   const copyPending = pendingCopySiteIds.value.has(siteId);
@@ -51,8 +62,9 @@ export function SiteCard({ siteId, onCopy, onSuccess, onOpen }: SiteCardProps): 
 
   return (
     <article
-      class={`dashboard-site-card${complete ? ' dashboard-site-card--complete' : ''}`}
+      class={`dashboard-site-card${complete ? ' dashboard-site-card--complete' : ''}${selected ? ' dashboard-site-card--selected' : ''}`}
       aria-labelledby={`dashboard-site-${site.id}`}
+      aria-selected={selectionMode ? selected : undefined}
     >
       <header class="dashboard-site-card__header">
         <div class="dashboard-site-card__identity">
@@ -77,6 +89,18 @@ export function SiteCard({ siteId, onCopy, onSuccess, onOpen }: SiteCardProps): 
             {status}
           </span>
         </div>
+
+        {selectionMode ? (
+          <label class="dashboard-site-card__selector">
+            <input
+              type="checkbox"
+              checked={selected}
+              aria-label={`Select ${site.name}`}
+              onChange={(event) => onToggleSelected(site.id, event.currentTarget.checked)}
+            />
+            <span aria-hidden="true">{selected ? <CheckIcon size={15} /> : null}</span>
+          </label>
+        ) : null}
 
         {streak >= 2 ? (
           <span class="dashboard-site-card__streak" aria-label={`${streak} day copy streak`}>

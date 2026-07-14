@@ -3,10 +3,17 @@ import { randomUUID } from 'node:crypto';
 import type { AppStateV1 } from '../../domain/app-state';
 import type { DailySiteMetrics } from '../../domain/entities/daily-metrics';
 import type { Site } from '../../domain/entities/site';
-import type { CheckinResultRecord, TaskCategory } from '../../domain/entities/task-category';
 import type {
+  CheckinResultRecord,
+  TaskCategory,
+  TaskSite,
+} from '../../domain/entities/task-category';
+import type {
+  AddTaskSitesToCategoriesRequest,
+  AddTaskSitesToCategoriesResponse,
   BootstrapResponse,
   RecordSuccessResponse,
+  SetCheckinScheduleRequest,
   SetHotkeysRequest,
   SiteUpsertRequest,
   SiteUpsertResponse,
@@ -223,6 +230,20 @@ export class ApplicationCommandService {
     return { snapshot: toRendererSnapshot(state) };
   }
 
+  async setCheckinSchedule(request: SetCheckinScheduleRequest): Promise<SnapshotResponse> {
+    const state = await this.stateService.update((draft) => {
+      draft.settings.checkin.scheduleEnabled = request.enabled;
+      draft.settings.checkin.scheduleTime = request.time;
+    });
+    return { snapshot: toRendererSnapshot(state) };
+  }
+
+  async markScheduledCheckinAttempt(date: string): Promise<void> {
+    await this.stateService.update((draft) => {
+      draft.settings.checkin.lastScheduledRunDate = date;
+    });
+  }
+
   async setHotkeys(request: SetHotkeysRequest): Promise<SnapshotResponse> {
     const state = await this.stateService.update((draft) => {
       draft.settings.hotkeys = {
@@ -238,11 +259,14 @@ export class ApplicationCommandService {
 
   async upsertTaskCategory(category: TaskCategory): Promise<TaskCategoryUpsertResponse> {
     const state = await this.stateService.update((draft) => {
+      const sharedSites = normaliseSharedTaskSites(draft, category.sites);
+      synchroniseSharedTaskSites(draft, sharedSites);
+      const nextCategory = { ...structuredClone(category), sites: sharedSites };
       const index = draft.taskCategories.findIndex((candidate) => candidate.id === category.id);
-      if (index < 0) draft.taskCategories.push(structuredClone(category));
-      else draft.taskCategories[index] = structuredClone(category);
+      if (index < 0) draft.taskCategories.push(nextCategory);
+      else draft.taskCategories[index] = nextCategory;
 
-      const validSiteIds = new Set(category.sites.map((site) => site.id));
+      const validSiteIds = new Set(sharedSites.map((site) => site.id));
       for (const dailyRecord of Object.values(draft.taskDailyRecords)) {
         const categoryRecord = dailyRecord[category.id];
         if (!categoryRecord) continue;
@@ -255,6 +279,56 @@ export class ApplicationCommandService {
     });
 
     return { categoryId: category.id, snapshot: toRendererSnapshot(state) };
+  }
+
+  async addTaskSitesToCategories(
+    request: AddTaskSitesToCategoriesRequest,
+  ): Promise<AddTaskSitesToCategoriesResponse> {
+    const updatedCategoryIds: string[] = [];
+    const state = await this.stateService.update((draft) => {
+      const categoryIds = [...new Set(request.categoryIds)];
+      const targets = categoryIds.map((categoryId) => {
+        const category = draft.taskCategories.find((candidate) => candidate.id === categoryId);
+        if (!category) {
+          throw new ApplicationError('NOT_FOUND', 'A selected category no longer exists.', {
+            field: 'categoryIds',
+            recoverable: true,
+          });
+        }
+        return category;
+      });
+
+      if (
+        request.newCategory &&
+        draft.taskCategories.some((category) => category.id === request.newCategory?.id)
+      ) {
+        throw new ApplicationError('VALIDATION_FAILED', 'The new category ID is already in use.', {
+          field: 'newCategory.id',
+          recoverable: true,
+        });
+      }
+
+      const sharedSites = normaliseSharedTaskSites(draft, request.sites);
+      synchroniseSharedTaskSites(draft, sharedSites);
+
+      for (const category of targets) {
+        const existingIds = new Set(category.sites.map((site) => site.id));
+        for (const site of sharedSites) {
+          if (!existingIds.has(site.id)) category.sites.push(structuredClone(site));
+        }
+        updatedCategoryIds.push(category.id);
+      }
+
+      if (request.newCategory) {
+        draft.taskCategories.push({
+          ...structuredClone(request.newCategory),
+          sites: structuredClone(sharedSites),
+        });
+        updatedCategoryIds.push(request.newCategory.id);
+      }
+    });
+
+    return { categoryIds: updatedCategoryIds, snapshot: toRendererSnapshot(state) };
   }
 
   async deleteTaskCategory(categoryId: string): Promise<SnapshotResponse> {
@@ -311,8 +385,11 @@ export class ApplicationCommandService {
         }
 
         const day = (draft.taskDailyRecords[date] ??= {});
-        const categoryState = (day[item.categoryId] ??= {});
-        categoryState[item.siteId] = item.done;
+        for (const membership of draft.taskCategories) {
+          if (!membership.sites.some((site) => site.id === item.siteId)) continue;
+          const categoryState = (day[membership.id] ??= {});
+          categoryState[item.siteId] = item.done;
+        }
       }
     });
 
@@ -321,6 +398,53 @@ export class ApplicationCommandService {
 
   getRendererSnapshot(): RendererSnapshot {
     return toRendererSnapshot(this.stateService.getSnapshot());
+  }
+}
+
+function normaliseSharedTaskSites(
+  state: AppStateV1,
+  incomingSites: readonly TaskSite[],
+): TaskSite[] {
+  const normalised = new Map<string, TaskSite>();
+
+  for (const incoming of incomingSites) {
+    const existing = findSharedTaskSite(state, incoming);
+    const site: TaskSite = {
+      ...(existing ? structuredClone(existing) : {}),
+      ...structuredClone(incoming),
+      id: existing?.id ?? incoming.id,
+      ...((incoming.sourceSiteId ?? existing?.sourceSiteId)
+        ? { sourceSiteId: incoming.sourceSiteId ?? existing?.sourceSiteId }
+        : {}),
+      ...((incoming.checkin ?? existing?.checkin)
+        ? { checkin: structuredClone(incoming.checkin ?? existing?.checkin) }
+        : {}),
+    };
+    normalised.set(site.id, site);
+  }
+
+  return [...normalised.values()];
+}
+
+function findSharedTaskSite(state: AppStateV1, incoming: TaskSite): TaskSite | null {
+  for (const category of state.taskCategories) {
+    const match = category.sites.find(
+      (site) =>
+        site.id === incoming.id ||
+        (incoming.sourceSiteId !== undefined && site.sourceSiteId === incoming.sourceSiteId),
+    );
+    if (match) return match;
+  }
+  return null;
+}
+
+function synchroniseSharedTaskSites(state: AppStateV1, sharedSites: readonly TaskSite[]): void {
+  const byId = new Map(sharedSites.map((site) => [site.id, site]));
+  for (const category of state.taskCategories) {
+    category.sites = category.sites.map((site) => {
+      const shared = byId.get(site.id);
+      return shared ? structuredClone(shared) : site;
+    });
   }
 }
 

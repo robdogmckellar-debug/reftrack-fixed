@@ -59,6 +59,11 @@ export function toRendererSnapshot(state: AppStateV1): RendererSnapshot {
       folderClearEnabled: state.settings.imageCleaner.enabled,
       folderClearPath: state.settings.imageCleaner.folderPath,
       folderClearHotkey: state.settings.imageCleaner.hotkey,
+      checkinSchedule: {
+        enabled: state.settings.checkin.scheduleEnabled,
+        time: state.settings.checkin.scheduleTime,
+        lastRunDate: state.settings.checkin.lastScheduledRunDate,
+      },
       hotkeys: {
         enabled: state.settings.hotkeys.enabled,
         bindings: state.settings.hotkeys.bindings.map((binding) => ({

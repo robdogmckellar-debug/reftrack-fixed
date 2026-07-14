@@ -6,6 +6,7 @@ import type { RendererHotkeySettings } from '../../../shared/view-model/renderer
 import { resolveHotkeyBindings } from '../../../shared/hotkeys/bindings';
 import { publishSnapshot, rendererSnapshot } from '../../app/store';
 import {
+  ActivityIcon,
   DatabaseIcon,
   FolderIcon,
   InfoIcon,
@@ -445,6 +446,111 @@ function HotkeysPanel(): JSX.Element {
   );
 }
 
+function ScheduledCheckinPanel(): JSX.Element {
+  const snapshot = rendererSnapshot.value;
+  const schedule = snapshot?.settings.checkinSchedule ?? {
+    enabled: false,
+    time: '09:00',
+    lastRunDate: null,
+  };
+  const targetCount =
+    snapshot?.tasks.categories.reduce(
+      (count, category) => count + category.sites.filter((site) => site.checkin?.enabled).length,
+      0,
+    ) ?? 0;
+  const [pending, setPending] = useState(false);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+
+  const save = async (enabled: boolean, time: string): Promise<void> => {
+    if (pending) return;
+    setPending(true);
+    setFeedback(null);
+    try {
+      const response = unwrapIpcResult(
+        await window.reftrack.settings.setCheckinSchedule({ enabled, time }),
+      );
+      publishSnapshot(response.snapshot);
+      setFeedback({
+        tone: 'success',
+        title: enabled ? 'Daily check-in scheduled' : 'Daily check-in disabled',
+        message: enabled
+          ? `Next run is scheduled for ${time} local time.`
+          : 'No daily run is scheduled.',
+      });
+    } catch (error) {
+      setFeedback({
+        tone: 'danger',
+        title: 'Schedule was not saved',
+        message: errorMessage(error, 'RefTrack could not save the daily check-in schedule.'),
+      });
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <section
+      class="settings-panel settings-panel--checkin"
+      aria-labelledby="checkin-schedule-title"
+    >
+      <header class="settings-panel__header">
+        <span class="settings-panel__icon settings-panel__icon--green" aria-hidden="true">
+          <ActivityIcon size={20} />
+        </span>
+        <div>
+          <span class="settings-eyebrow">Background schedule</span>
+          <h2 id="checkin-schedule-title">Daily auto check-in</h2>
+          <p>Runs enabled Daily Tasks sites while RefTrack remains in the tray.</p>
+        </div>
+      </header>
+
+      {feedback ? (
+        <div
+          class={`settings-feedback settings-feedback--${feedback.tone}`}
+          role={feedback.tone === 'danger' ? 'alert' : 'status'}
+        >
+          <strong>{feedback.title}</strong>
+          <span>{feedback.message}</span>
+        </div>
+      ) : null}
+
+      <div class="settings-control-card settings-checkin-schedule">
+        <ToggleSwitch
+          id="settings-checkin-schedule-enabled"
+          label="Enable daily auto check-in"
+          description={`${targetCount} check-in site${targetCount === 1 ? '' : 's'} currently enabled`}
+          checked={schedule.enabled}
+          pending={pending}
+          onChange={(enabled) => void save(enabled, schedule.time)}
+        />
+
+        <label class="settings-checkin-time" htmlFor="settings-checkin-schedule-time">
+          <span>
+            <strong>Run time</strong>
+            <small>Local computer time</small>
+          </span>
+          <input
+            id="settings-checkin-schedule-time"
+            type="time"
+            value={schedule.time}
+            disabled={pending}
+            onChange={(event) => void save(schedule.enabled, event.currentTarget.value)}
+          />
+        </label>
+
+        <div class="settings-checkin-summary" role="status">
+          <span>{schedule.enabled ? `Daily at ${schedule.time}` : 'Schedule off'}</span>
+          <span>
+            {schedule.lastRunDate
+              ? `Last scheduled attempt: ${schedule.lastRunDate}`
+              : 'Not run yet'}
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function SettingsScreen({ active }: { active: boolean }): JSX.Element {
   const snapshot = rendererSnapshot.value;
   const enabled = snapshot?.settings.folderClearEnabled ?? false;
@@ -815,6 +921,8 @@ export function SettingsScreen({ active }: { active: boolean }): JSX.Element {
           </section>
 
           <HotkeysPanel />
+
+          <ScheduledCheckinPanel />
 
           <section
             class="settings-panel settings-panel--recent"

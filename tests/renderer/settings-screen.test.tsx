@@ -24,6 +24,7 @@ function createSnapshot(overrides: Partial<RendererSnapshot> = {}): RendererSnap
       darkMode: true,
       folderClearEnabled: false,
       folderClearPath: null,
+      checkinSchedule: { enabled: false, time: '09:00', lastRunDate: null },
     },
     tasks: { categories: [] },
     tasksDailyState: {},
@@ -47,6 +48,7 @@ interface ApiMocks {
   setEnabled: ReturnType<typeof vi.fn>;
   selectFolder: ReturnType<typeof vi.fn>;
   setHotkey: ReturnType<typeof vi.fn>;
+  setCheckinSchedule: ReturnType<typeof vi.fn>;
   runCleanup: ReturnType<typeof vi.fn>;
   emitCleanup(event: ImageCleanupCompletedEvent): void;
 }
@@ -57,6 +59,7 @@ function installApi(): ApiMocks {
   const setEnabled = vi.fn();
   const selectFolder = vi.fn();
   const setHotkey = vi.fn();
+  const setCheckinSchedule = vi.fn();
   const runCleanup = vi.fn();
 
   const api = {
@@ -69,6 +72,7 @@ function installApi(): ApiMocks {
       setImageCleanerEnabled: setEnabled,
       selectImageCleanerFolder: selectFolder,
       setImageCleanerHotkey: setHotkey,
+      setCheckinSchedule,
     },
     imageCleaner: {
       run: runCleanup,
@@ -101,6 +105,7 @@ function installApi(): ApiMocks {
     setEnabled,
     selectFolder,
     setHotkey,
+    setCheckinSchedule,
     runCleanup,
     emitCleanup: (event) => cleanupListener?.(event),
   };
@@ -159,6 +164,62 @@ describe('SettingsScreen', () => {
       (screen.getByRole('checkbox', { name: 'Enable cleanup after Copy Link' }) as HTMLInputElement)
         .checked,
     ).toBe(true);
+  });
+
+  it('saves and presents the daily auto check-in schedule', async () => {
+    const mocks = installApi();
+    const scheduledSnapshot = createSnapshot({
+      revision: 11,
+      settings: {
+        darkMode: true,
+        folderClearEnabled: false,
+        folderClearPath: null,
+        checkinSchedule: { enabled: true, time: '09:00', lastRunDate: null },
+      },
+    });
+    mocks.setCheckinSchedule.mockResolvedValue({
+      ok: true,
+      data: { snapshot: scheduledSnapshot },
+    });
+
+    publishSnapshot(createSnapshot());
+    render(<SettingsScreen active />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Enable daily auto check-in' }));
+
+    await waitFor(() =>
+      expect(mocks.setCheckinSchedule).toHaveBeenCalledWith({ enabled: true, time: '09:00' }),
+    );
+    expect(await screen.findByText('Daily check-in scheduled')).toBeTruthy();
+    expect(screen.getByText('Daily at 09:00')).toBeTruthy();
+  });
+
+  it('saves a changed local check-in time', async () => {
+    const mocks = installApi();
+    const initial = createSnapshot({
+      settings: {
+        darkMode: true,
+        folderClearEnabled: false,
+        folderClearPath: null,
+        checkinSchedule: { enabled: true, time: '09:00', lastRunDate: null },
+      },
+    });
+    const updated = createSnapshot({
+      revision: 11,
+      settings: {
+        ...initial.settings,
+        checkinSchedule: { enabled: true, time: '07:30', lastRunDate: null },
+      },
+    });
+    mocks.setCheckinSchedule.mockResolvedValue({ ok: true, data: { snapshot: updated } });
+
+    publishSnapshot(initial);
+    render(<SettingsScreen active />);
+    fireEvent.change(screen.getByLabelText(/Run time/), { target: { value: '07:30' } });
+
+    await waitFor(() =>
+      expect(mocks.setCheckinSchedule).toHaveBeenCalledWith({ enabled: true, time: '07:30' }),
+    );
+    expect(await screen.findByText('Daily at 07:30')).toBeTruthy();
   });
 
   it('selects a dedicated folder and presents the committed path', async () => {

@@ -110,4 +110,64 @@ describe('typed application commands', () => {
       'category-a': {},
     });
   });
+
+  it('adds shared sites to existing and new categories in one transaction', async () => {
+    const { commands, state } = await createCommands();
+    await commands.upsertTaskCategory({
+      id: 'category-a',
+      name: 'Category A',
+      colour: 'teal',
+      sites: [{ id: 'site-a', name: 'A', url: 'https://a.example' }],
+    });
+
+    const response = await commands.addTaskSitesToCategories({
+      sites: [{ id: 'site-a', name: 'A', url: 'https://a.example' }],
+      categoryIds: ['category-a'],
+      newCategory: { id: 'category-b', name: 'Category B', colour: 'purple' },
+    });
+
+    expect(response.categoryIds).toEqual(['category-a', 'category-b']);
+    expect(state.getSnapshot().taskCategories).toMatchObject([
+      { id: 'category-a', sites: [{ id: 'site-a' }] },
+      { id: 'category-b', sites: [{ id: 'site-a' }] },
+    ]);
+  });
+
+  it('synchronises shared site edits and completion across category memberships', async () => {
+    const { commands, state } = await createCommands();
+    await commands.upsertTaskCategory({
+      id: 'category-a',
+      name: 'Category A',
+      colour: 'teal',
+      sites: [{ id: 'site-a', name: 'A', url: 'https://a.example' }],
+    });
+    await commands.addTaskSitesToCategories({
+      sites: [{ id: 'site-a', name: 'A', url: 'https://a.example' }],
+      categoryIds: [],
+      newCategory: { id: 'category-b', name: 'Category B', colour: 'purple' },
+    });
+
+    await commands.upsertTaskCategory({
+      id: 'category-a',
+      name: 'Category A',
+      colour: 'teal',
+      sites: [{ id: 'site-a', name: 'Updated A', url: 'https://a.example/new' }],
+    });
+    await commands.setTaskCompletion('2026-06-30', {
+      categoryId: 'category-a',
+      siteId: 'site-a',
+      done: true,
+    });
+
+    const snapshot = state.getSnapshot();
+    expect(snapshot.taskCategories[1]?.sites[0]).toMatchObject({
+      id: 'site-a',
+      name: 'Updated A',
+      url: 'https://a.example/new',
+    });
+    expect(snapshot.taskDailyRecords['2026-06-30']).toEqual({
+      'category-a': { 'site-a': true },
+      'category-b': { 'site-a': true },
+    });
+  });
 });

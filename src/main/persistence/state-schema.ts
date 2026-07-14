@@ -56,6 +56,7 @@ const TaskSiteCheckinSchema = z
 const TaskSiteSchema = z
   .object({
     id: EntityIdSchema,
+    sourceSiteId: EntityIdSchema.optional(),
     name: z.string().trim().min(1).max(100),
     url: z.string().max(2048),
     checkin: TaskSiteCheckinSchema.optional(),
@@ -64,6 +65,12 @@ const TaskSiteSchema = z
 
 const CheckinSettingsSchema = z
   .object({
+    scheduleEnabled: z.boolean().default(false),
+    scheduleTime: z
+      .string()
+      .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, 'Expected a 24-hour HH:mm time')
+      .default('09:00'),
+    lastScheduledRunDate: IsoDateSchema.nullable().default(null),
     loginPath: z.string().max(2048),
     checkinPath: z.string().max(2048),
     usernameSelector: z.string().max(1000),
@@ -185,5 +192,30 @@ export const AppStateV1Schema = z
   });
 
 export function parseAppState(value: unknown): AppStateV1 {
-  return AppStateV1Schema.parse(value);
+  return AppStateV1Schema.parse(stripRetiredAutoShareFields(value));
+}
+
+function stripRetiredAutoShareFields(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+
+  const state = { ...(value as Record<string, unknown>) };
+  delete state.autoShareRotation;
+
+  if (Array.isArray(state.sites)) {
+    state.sites = state.sites.map((site) => {
+      if (!site || typeof site !== 'object' || Array.isArray(site)) return site;
+      const cleaned = { ...(site as Record<string, unknown>) };
+      delete cleaned.autoShareEnabled;
+      delete cleaned.groupsPerRun;
+      return cleaned;
+    });
+  }
+
+  if (state.settings && typeof state.settings === 'object' && !Array.isArray(state.settings)) {
+    const settings = { ...(state.settings as Record<string, unknown>) };
+    delete settings.autoShare;
+    state.settings = settings;
+  }
+
+  return state;
 }

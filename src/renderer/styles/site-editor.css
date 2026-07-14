@@ -715,3 +715,14 @@
     padding-inline: var(--space-4);
   }
 }
+
+.site-editor-checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.site-editor-checkbox-row input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+}

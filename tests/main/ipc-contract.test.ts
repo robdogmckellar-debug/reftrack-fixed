@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { IPC_CHANNELS } from '../../src/shared/ipc/channels';
 import {
+  AddTaskSitesToCategoriesRequestSchema,
   CheckinSaveCredentialsRequestSchema,
   CheckinStartRequestSchema,
   CopyLinkRequestSchema,
+  SetCheckinScheduleRequestSchema,
   SiteUpsertRequestSchema,
   TaskCategoryUpsertRequestSchema,
   TaskCompletionRequestSchema,
@@ -29,6 +31,35 @@ describe('typed IPC contract', () => {
     expect(channels).toContain('checkin:delete-credentials');
     expect(channels).toContain('checkin:progress');
     expect(channels).toContain('checkin:completed');
+    expect(channels).toContain('settings:set-checkin-schedule');
+    expect(channels).toContain('window:hide-to-tray');
+    expect(channels).toContain('tasks:add-sites-to-categories');
+  });
+
+  it('accepts only valid daily check-in schedule times', () => {
+    expect(SetCheckinScheduleRequestSchema.parse({ enabled: true, time: '09:30' })).toEqual({
+      enabled: true,
+      time: '09:30',
+    });
+    expect(() => SetCheckinScheduleRequestSchema.parse({ enabled: true, time: '24:00' })).toThrow();
+    expect(() => SetCheckinScheduleRequestSchema.parse({ enabled: true, time: '9:30' })).toThrow();
+  });
+
+  it('validates bulk category membership requests', () => {
+    expect(
+      AddTaskSitesToCategoriesRequestSchema.parse({
+        sites: [{ id: 'site-a', name: 'Alpha', url: 'https://alpha.example' }],
+        categoryIds: ['category-a'],
+        newCategory: null,
+      }).categoryIds,
+    ).toEqual(['category-a']);
+    expect(() =>
+      AddTaskSitesToCategoriesRequestSchema.parse({
+        sites: [{ id: 'site-a', name: 'Alpha', url: 'https://alpha.example' }],
+        categoryIds: [],
+        newCategory: null,
+      }),
+    ).toThrow(/Choose an existing category/);
   });
 
   it('validates auto check-in requests and accepts an optional per-site check-in config', () => {

@@ -1,5 +1,9 @@
 import type { IpcErrorCode, IpcResult } from './result';
-import type { RendererSnapshot, RendererTaskCategory } from '../view-model/renderer-snapshot';
+import type {
+  RendererSnapshot,
+  RendererTaskCategory,
+  RendererTaskSite,
+} from '../view-model/renderer-snapshot';
 
 export interface ApplicationInfo {
   name: string;
@@ -108,6 +112,11 @@ export interface SetImageCleanerHotkeyRequest {
   hotkey: string | null;
 }
 
+export interface SetCheckinScheduleRequest {
+  enabled: boolean;
+  time: string;
+}
+
 export interface HotkeyBindingRequest {
   siteId: string;
   key: string;
@@ -133,6 +142,20 @@ export interface TaskCategoryUpsertRequest {
 
 export interface TaskCategoryUpsertResponse extends SnapshotResponse {
   categoryId: string;
+}
+
+export interface AddTaskSitesToCategoriesRequest {
+  sites: RendererTaskSite[];
+  categoryIds: string[];
+  newCategory: {
+    id: string;
+    name: string;
+    colour: RendererTaskCategory['colour'];
+  } | null;
+}
+
+export interface AddTaskSitesToCategoriesResponse extends SnapshotResponse {
+  categoryIds: string[];
 }
 
 export interface TaskCategoryDeleteRequest {
@@ -327,10 +350,11 @@ export interface RefTrackApi {
     setImageCleanerHotkey(
       request: SetImageCleanerHotkeyRequest,
     ): Promise<IpcResult<SnapshotResponse>>;
+    setCheckinSchedule(request: SetCheckinScheduleRequest): Promise<IpcResult<SnapshotResponse>>;
     setHotkeys(request: SetHotkeysRequest): Promise<IpcResult<SnapshotResponse>>;
   };
   window: {
-    minimize(): Promise<IpcResult<{ minimized: boolean }>>;
+    hideToTray(): Promise<IpcResult<{ hidden: boolean }>>;
   };
   hotkeys: {
     onTriggered(listener: (event: HotkeyTriggeredEvent) => void): () => void;
@@ -343,6 +367,9 @@ export interface RefTrackApi {
     upsertCategory(
       request: TaskCategoryUpsertRequest,
     ): Promise<IpcResult<TaskCategoryUpsertResponse>>;
+    addSitesToCategories(
+      request: AddTaskSitesToCategoriesRequest,
+    ): Promise<IpcResult<AddTaskSitesToCategoriesResponse>>;
     deleteCategory(request: TaskCategoryDeleteRequest): Promise<IpcResult<SnapshotResponse>>;
     setCompletion(request: TaskCompletionRequest): Promise<IpcResult<SnapshotResponse>>;
     setCompletions(request: TaskCompletionsRequest): Promise<IpcResult<SnapshotResponse>>;

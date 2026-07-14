@@ -12,6 +12,9 @@ export interface ImageCleanerSettings {
  * site's markup ever differs.
  */
 export interface CheckinSettings {
+  scheduleEnabled: boolean;
+  scheduleTime: string;
+  lastScheduledRunDate: string | null;
   loginPath: string;
   checkinPath: string;
   usernameSelector: string;
@@ -40,6 +43,9 @@ export interface AppSettings {
 }
 
 export const DEFAULT_CHECKIN_SETTINGS: CheckinSettings = {
+  scheduleEnabled: false,
+  scheduleTime: '09:00',
+  lastScheduledRunDate: null,
   loginPath: '/login',
   checkinPath: '/daily-checkin',
   usernameSelector:

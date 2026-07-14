@@ -14,6 +14,7 @@ import type {
 import type { IpcFailure, IpcResult } from '../../shared/ipc/result';
 import {
   ActionNotificationRequestSchema,
+  AddTaskSitesToCategoriesRequestSchema,
   CheckinCancelRequestSchema,
   CheckinDeleteCredentialsRequestSchema,
   CheckinSaveCredentialsRequestSchema,
@@ -24,6 +25,7 @@ import {
   ImporterStartRequestSchema,
   OpenExternalRequestSchema,
   RecordSuccessRequestSchema,
+  SetCheckinScheduleRequestSchema,
   SetHotkeysRequestSchema,
   SetImageCleanerEnabledRequestSchema,
   SetImageCleanerHotkeyRequestSchema,
@@ -35,9 +37,11 @@ import {
   TaskCompletionsRequestSchema,
   UndoSuccessRequestSchema,
 } from '../../shared/ipc/schemas';
+import { openExternalInBackground } from '../application/external-link';
 import { CheckinCoordinator } from '../checkin/checkin-coordinator';
 import { CredentialStore } from '../checkin/credential-store';
 import type { CredentialCrypto } from '../checkin/credential-store';
+import { DailyCheckinScheduler } from '../checkin/daily-checkin-scheduler';
 import { ImportCoordinator } from '../importer/import-coordinator';
 import { ApplicationCommandService } from '../services/application-command-service';
 import { CopyActionService } from '../services/copy-action-service';
@@ -65,6 +69,7 @@ export interface RegisterIpcHandlersOptions {
 }
 
 export interface IpcHandlerRegistration {
+  startBackgroundServices(): void;
   dispose(): void;
 }
 
@@ -111,17 +116,50 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
     credentialCrypto,
   );
 
+  const scheduledRunIds = new Set<string>();
+
   const checkin = new CheckinCoordinator({
     getState: () => options.stateService.getSnapshot(),
     getCredentials: (taskSiteId) => credentialStore.get(taskSiteId),
     persistResult: (date, taskSiteId, result) =>
       commands.recordCheckinResult(date, taskSiteId, result),
     onProgress: (event) => sendToWindow(IPC_CHANNELS.checkinProgress, event),
-    onCompleted: (event) =>
+    onCompleted: (event) => {
+      if (scheduledRunIds.delete(event.runId)) showScheduledCheckinCompletion(event);
       sendToWindow(IPC_CHANNELS.checkinCompleted, {
         ...event,
         snapshot: commands.getRendererSnapshot(),
-      }),
+      });
+    },
+  });
+
+  const checkinScheduler = new DailyCheckinScheduler({
+    getSchedule: () => {
+      const settings = options.stateService.getSnapshot().settings.checkin;
+      return {
+        enabled: settings.scheduleEnabled,
+        time: settings.scheduleTime,
+        lastRunDate: settings.lastScheduledRunDate,
+      };
+    },
+    startRun: () => {
+      try {
+        const response = checkin.start({ taskSiteId: null });
+        scheduledRunIds.add(response.runId);
+        return 'started';
+      } catch (error: unknown) {
+        if (error instanceof ApplicationError && error.code === 'CHECKIN_IN_PROGRESS') {
+          return 'busy';
+        }
+        throw error;
+      }
+    },
+    markAttempt: (date) => commands.markScheduledCheckinAttempt(date),
+    onError: (error) => {
+      const message =
+        error instanceof Error ? error.message : 'The scheduled check-in could not be started.';
+      showNotification('RefTrack scheduled check-in', message);
+    },
   });
 
   const pruneCheckinCredentials = async (): Promise<void> => {
@@ -129,6 +167,7 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
     const ids = state.taskCategories.flatMap((category) => category.sites.map((site) => site.id));
     await credentialStore.pruneExcept(ids);
   };
+
   const senderOptions = {
     getMainWindow: options.getMainWindow,
     development: options.development,
@@ -213,11 +252,11 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
     return response;
   });
 
-  registerHandler(IPC_CHANNELS.windowMinimize, EmptyRequestSchema, () => {
+  registerHandler(IPC_CHANNELS.windowHideToTray, EmptyRequestSchema, () => {
     const window = options.getMainWindow();
-    if (!window || window.isDestroyed() || !window.isMinimizable()) return { minimized: false };
-    window.minimize();
-    return { minimized: true };
+    if (!window || window.isDestroyed()) return { hidden: false };
+    window.hide();
+    return { hidden: true };
   });
 
   registerHandler(
@@ -282,6 +321,16 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
   );
 
   registerHandler(
+    IPC_CHANNELS.settingsSetCheckinSchedule,
+    SetCheckinScheduleRequestSchema,
+    async (request) => {
+      const response = await commands.setCheckinSchedule(request);
+      checkinScheduler.refresh();
+      return response;
+    },
+  );
+
+  registerHandler(
     IPC_CHANNELS.tasksUpsertCategory,
     TaskCategoryUpsertRequestSchema,
     async (request) => {
@@ -289,6 +338,11 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
       await pruneCheckinCredentials();
       return response;
     },
+  );
+  registerHandler(
+    IPC_CHANNELS.tasksAddSitesToCategories,
+    AddTaskSitesToCategoriesRequestSchema,
+    (request) => commands.addTaskSitesToCategories(request),
   );
   registerHandler(
     IPC_CHANNELS.tasksDeleteCategory,
@@ -309,7 +363,9 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
   registerHandler(IPC_CHANNELS.externalOpen, OpenExternalRequestSchema, async (request) => {
     const url = validateExternalUrl(request.url);
     try {
-      await shell.openExternal(url.href);
+      await openExternalInBackground(url.href, options.getMainWindow(), (target) =>
+        shell.openExternal(target),
+      );
       return { opened: true as const };
     } catch (error: unknown) {
       throw new ApplicationError('EXTERNAL_URL_FAILED', 'Windows could not open that link.', {
@@ -381,9 +437,11 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
   }));
 
   return {
+    startBackgroundServices: () => checkinScheduler.start(),
     dispose: () => {
       importer.dispose();
       imageCleanerHotkey.dispose();
+      checkinScheduler.dispose();
       checkin.dispose();
       for (const channel of Object.values(IPC_CHANNELS)) ipcMain.removeHandler(channel);
     },
@@ -415,6 +473,40 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
         return failure;
       }
     });
+  }
+}
+
+function showScheduledCheckinCompletion(event: {
+  cancelled: boolean;
+  results: Array<{ status: 'success' | 'failed' | 'skipped' }>;
+}): void {
+  if (event.cancelled) {
+    showNotification('Scheduled check-in cancelled', 'The scheduled run was stopped.');
+    return;
+  }
+
+  const succeeded = event.results.filter((result) => result.status === 'success').length;
+  const needsAttention = event.results.length - succeeded;
+  if (needsAttention > 0) {
+    showNotification(
+      'Scheduled check-in needs attention',
+      `${succeeded} confirmed; ${needsAttention} failed or could not be verified.`,
+    );
+    return;
+  }
+
+  showNotification(
+    'Scheduled check-in complete',
+    `${succeeded} site${succeeded === 1 ? '' : 's'} confirmed successfully.`,
+  );
+}
+
+function showNotification(title: string, body: string): void {
+  if (!Notification.isSupported()) return;
+  try {
+    new Notification({ title, body, silent: false }).show();
+  } catch {
+    // Notifications are best-effort and must not interrupt background work.
   }
 }
 

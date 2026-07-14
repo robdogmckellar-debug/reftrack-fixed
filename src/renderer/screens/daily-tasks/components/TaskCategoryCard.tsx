@@ -32,11 +32,14 @@ interface TaskCategoryCardProps {
   pendingSiteIds: ReadonlySet<string>;
   openRemainingPending: boolean;
   checkinRunning: boolean;
+  selectionMode: boolean;
+  selectedSiteIds: ReadonlySet<string>;
   onToggleExpanded(): void;
   onVisit(site: RendererTaskSite): void;
   onSetDone(site: RendererTaskSite, done: boolean): void;
   onOpenRemaining(): void;
   onCheckin(site: RendererTaskSite): void;
+  onToggleSelected(site: RendererTaskSite, selected: boolean): void;
   onEdit(): void;
   onDelete(): void;
 }
@@ -84,11 +87,14 @@ export function TaskCategoryCard({
   pendingSiteIds,
   openRemainingPending,
   checkinRunning,
+  selectionMode,
+  selectedSiteIds,
   onToggleExpanded,
   onVisit,
   onSetDone,
   onOpenRemaining,
   onCheckin,
+  onToggleSelected,
   onEdit,
   onDelete,
 }: TaskCategoryCardProps): JSX.Element {
@@ -185,17 +191,34 @@ export function TaskCategoryCard({
               const host = siteHost(site.url);
 
               return (
-                <li key={site.id} class={done ? 'is-done' : ''}>
-                  <label class="task-site-check">
-                    <input
-                      type="checkbox"
-                      checked={done}
-                      disabled={pending || openRemainingPending}
-                      aria-label={`Mark ${site.name} ${done ? 'not complete' : 'complete'}`}
-                      onChange={(event) => onSetDone(site, event.currentTarget.checked)}
-                    />
-                    <span aria-hidden="true">{done ? <CheckIcon size={15} /> : null}</span>
-                  </label>
+                <li
+                  key={site.id}
+                  class={`${done ? 'is-done' : ''}${selectedSiteIds.has(site.id) ? ' is-selected' : ''}`}
+                >
+                  {selectionMode ? (
+                    <label class="task-site-select">
+                      <input
+                        type="checkbox"
+                        checked={selectedSiteIds.has(site.id)}
+                        aria-label={`Select ${site.name}`}
+                        onChange={(event) => onToggleSelected(site, event.currentTarget.checked)}
+                      />
+                      <span aria-hidden="true">
+                        {selectedSiteIds.has(site.id) ? <CheckIcon size={15} /> : null}
+                      </span>
+                    </label>
+                  ) : (
+                    <label class="task-site-check">
+                      <input
+                        type="checkbox"
+                        checked={done}
+                        disabled={pending || openRemainingPending}
+                        aria-label={`Mark ${site.name} ${done ? 'not complete' : 'complete'}`}
+                        onChange={(event) => onSetDone(site, event.currentTarget.checked)}
+                      />
+                      <span aria-hidden="true">{done ? <CheckIcon size={15} /> : null}</span>
+                    </label>
+                  )}
 
                   <div class="task-site-copy">
                     <strong>{site.name}</strong>

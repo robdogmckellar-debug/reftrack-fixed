@@ -62,6 +62,13 @@ export const SetImageCleanerHotkeyRequestSchema = z
   .object({ hotkey: z.string().trim().min(1).max(120).nullable() })
   .strict();
 
+export const SetCheckinScheduleRequestSchema = z
+  .object({
+    enabled: z.boolean(),
+    time: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, 'Expected a 24-hour HH:mm time'),
+  })
+  .strict();
+
 export const SetHotkeysRequestSchema = z
   .object({
     enabled: z.boolean(),
@@ -94,6 +101,7 @@ const TaskSiteCheckinSchema = z
 const TaskSiteSchema = z
   .object({
     id: EntityIdSchema,
+    sourceSiteId: EntityIdSchema.optional(),
     name: z.string().trim().min(1).max(100),
     url: OptionalCredentialFreeHttpsUrlSchema,
     checkin: TaskSiteCheckinSchema.optional(),
@@ -110,6 +118,25 @@ export const TaskCategorySchema = z
   .strict();
 
 export const TaskCategoryUpsertRequestSchema = z.object({ category: TaskCategorySchema }).strict();
+
+export const AddTaskSitesToCategoriesRequestSchema = z
+  .object({
+    sites: z.array(TaskSiteSchema).min(1).max(1000),
+    categoryIds: z.array(EntityIdSchema).max(500),
+    newCategory: z
+      .object({
+        id: EntityIdSchema,
+        name: z.string().trim().min(1).max(100),
+        colour: z.enum(['teal', 'purple', 'green', 'gold', 'orange', 'red', 'blue', 'pink']),
+      })
+      .strict()
+      .nullable(),
+  })
+  .strict()
+  .refine((request) => request.categoryIds.length > 0 || request.newCategory !== null, {
+    message: 'Choose an existing category or create a new category',
+    path: ['categoryIds'],
+  });
 
 export const TaskCategoryDeleteRequestSchema = z.object({ categoryId: EntityIdSchema }).strict();
 

@@ -80,6 +80,31 @@ describe('serial state service', () => {
     expect(service.getSnapshot().settings.hotkeys).toEqual({ enabled: true, bindings: [] });
   });
 
+  it('loads legacy check-in settings without schedule fields', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'reftrack-service-'));
+    temporaryDirectories.push(directory);
+    const filePath = path.join(directory, 'state.json');
+
+    const legacy = createDefaultAppState() as Record<string, unknown>;
+    const settings = { ...(legacy.settings as Record<string, unknown>) };
+    const checkin = { ...(settings.checkin as Record<string, unknown>) };
+    delete checkin.scheduleEnabled;
+    delete checkin.scheduleTime;
+    delete checkin.lastScheduledRunDate;
+    settings.checkin = checkin;
+    legacy.settings = settings;
+    await writeFile(filePath, JSON.stringify(legacy, null, 2), 'utf8');
+
+    const { service, initialisation } = await StateService.create({ filePath });
+
+    expect(initialisation.recovered).toBe(false);
+    expect(service.getSnapshot().settings.checkin).toMatchObject({
+      scheduleEnabled: false,
+      scheduleTime: '09:00',
+      lastScheduledRunDate: null,
+    });
+  });
+
   it('keeps the current state unchanged when validation rejects a replacement', async () => {
     const service = await createService();
     const invalid = service.getSnapshot();

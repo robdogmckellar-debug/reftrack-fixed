@@ -63,6 +63,8 @@ interface ApiMocks {
   recordSuccess: ReturnType<typeof vi.fn>;
   undoSuccess: ReturnType<typeof vi.fn>;
   clearActivity: ReturnType<typeof vi.fn>;
+  openExternal: ReturnType<typeof vi.fn>;
+  addSitesToCategories: ReturnType<typeof vi.fn>;
 }
 
 function installApi(): ApiMocks {
@@ -70,6 +72,8 @@ function installApi(): ApiMocks {
   const recordSuccess = vi.fn();
   const undoSuccess = vi.fn();
   const clearActivity = vi.fn();
+  const openExternal = vi.fn().mockResolvedValue({ ok: true, data: { opened: true } });
+  const addSitesToCategories = vi.fn();
   const api = {
     bootstrap: vi.fn(),
     sites: { upsert: vi.fn(), delete: vi.fn() },
@@ -79,11 +83,12 @@ function installApi(): ApiMocks {
     imageCleaner: { onCompleted: vi.fn(() => () => undefined) },
     tasks: {
       upsertCategory: vi.fn(),
+      addSitesToCategories,
       deleteCategory: vi.fn(),
       setCompletion: vi.fn(),
       setCompletions: vi.fn(),
     },
-    external: { open: vi.fn().mockResolvedValue({ ok: true, data: { opened: true } }) },
+    external: { open: openExternal },
     notifications: {
       showAction: vi.fn().mockResolvedValue({ ok: true, data: { shown: true } }),
     },
@@ -96,7 +101,14 @@ function installApi(): ApiMocks {
   } as unknown as RefTrackApi;
 
   Object.defineProperty(window, 'reftrack', { configurable: true, value: api });
-  return { copyLink, recordSuccess, undoSuccess, clearActivity };
+  return {
+    copyLink,
+    recordSuccess,
+    undoSuccess,
+    clearActivity,
+    openExternal,
+    addSitesToCategories,
+  };
 }
 
 beforeEach(() => {
@@ -218,5 +230,67 @@ describe('DashboardScreen', () => {
       expect(mocks.undoSuccess).toHaveBeenCalledWith({ activityId: 'activity-success' }),
     );
     await waitFor(() => expect(screen.getByText('Success removed')).toBeTruthy());
+  });
+
+  it('selects multiple cards and opens their URLs in order', async () => {
+    const mocks = installApi();
+    publishSnapshot(createSnapshot());
+    render(<DashboardScreen active />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Alpha' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Bravo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open sites' }));
+
+    await waitFor(() => expect(mocks.openExternal).toHaveBeenCalledTimes(2));
+    expect(mocks.openExternal).toHaveBeenNthCalledWith(1, {
+      url: 'https://alpha.example/ref',
+    });
+    expect(mocks.openExternal).toHaveBeenNthCalledWith(2, {
+      url: 'https://bravo.example/ref',
+    });
+  });
+
+  it('adds selected referral cards to a new Daily Tasks category', async () => {
+    const mocks = installApi();
+    const initial = createSnapshot();
+    mocks.addSitesToCategories.mockImplementation(async (request) => ({
+      ok: true,
+      data: {
+        categoryIds: [request.newCategory.id],
+        snapshot: {
+          ...initial,
+          revision: 2,
+          tasks: {
+            categories: [{ ...request.newCategory, sites: request.sites }],
+          },
+        },
+      },
+    }));
+
+    publishSnapshot(initial);
+    render(<DashboardScreen active />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Alpha' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to category' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Add 1 site to categories' });
+    fireEvent.input(within(dialog).getByLabelText('New category'), {
+      target: { value: 'Priority' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add to categories' }));
+
+    await waitFor(() => expect(mocks.addSitesToCategories).toHaveBeenCalledTimes(1));
+    expect(mocks.addSitesToCategories.mock.calls[0]?.[0]).toMatchObject({
+      sites: [
+        {
+          sourceSiteId: 'site-alpha',
+          name: 'Alpha',
+          url: 'https://alpha.example/ref',
+        },
+      ],
+      categoryIds: [],
+      newCategory: { name: 'Priority' },
+    });
   });
 });

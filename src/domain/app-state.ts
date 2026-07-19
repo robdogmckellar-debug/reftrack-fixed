@@ -2,6 +2,7 @@ import type { DailyRecords } from './entities/daily-metrics';
 import type { ActivityEntry } from './entities/activity';
 import type { AppSettings } from './entities/settings';
 import type { Site } from './entities/site';
+import type { PayoutEntry } from './entities/payout';
 import type { CheckinDailyRecords, TaskCategory, TaskDailyRecords } from './entities/task-category';
 
 export const APP_STATE_SCHEMA_VERSION = 1 as const;
@@ -16,6 +17,7 @@ export interface AppStateV1 {
   taskCategories: TaskCategory[];
   taskDailyRecords: TaskDailyRecords;
   checkinDailyRecords: CheckinDailyRecords;
+  payouts?: PayoutEntry[];
 }
 
 export interface StateTotals {

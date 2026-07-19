@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { AppStateV1 } from '../../domain/app-state';
 import type { DailySiteMetrics } from '../../domain/entities/daily-metrics';
 import type { Site } from '../../domain/entities/site';
+import type { PayoutEntry } from '../../domain/entities/payout';
 import type {
   CheckinResultRecord,
   TaskCategory,
@@ -12,9 +13,14 @@ import type {
   AddTaskSitesToCategoriesRequest,
   AddTaskSitesToCategoriesResponse,
   BootstrapResponse,
+  FacebookGroupShareUpsertRequest,
+  FacebookGroupShareUpsertResponse,
+  PayoutUpsertRequest,
+  PayoutUpsertResponse,
   RecordSuccessResponse,
   SetCheckinScheduleRequest,
   SetHotkeysRequest,
+  SiteLifecycleRequest,
   SiteUpsertRequest,
   SiteUpsertResponse,
   SnapshotResponse,
@@ -40,6 +46,10 @@ export class ApplicationCommandService {
     const siteId = request.id ?? `site_${randomUUID()}`;
 
     const state = await this.stateService.update((draft) => {
+      const existing =
+        request.id === null
+          ? null
+          : (draft.sites.find((candidate) => candidate.id === request.id) ?? null);
       const site: Site = {
         id: siteId,
         name: request.name,
@@ -49,6 +59,18 @@ export class ApplicationCommandService {
         dateFormat: request.dateFormat,
         bonusCents: request.bonusCents,
         maxCopiesPerDay: request.maxCopiesPerDay,
+        notes: request.notes,
+        lifecycle: existing?.lifecycle ?? 'active',
+        lifecycleChangedAt: existing?.lifecycleChangedAt ?? null,
+        payoutThresholdCents: request.payoutThresholdCents,
+        appClaim: {
+          enabled: request.appClaim.enabled,
+          downloadUrl: request.appClaim.downloadUrl,
+          apkPath: request.appClaim.apkPath,
+          packageName: request.appClaim.packageName,
+          deepLinkUrl: request.appClaim.deepLinkUrl,
+          avdName: request.appClaim.avdName,
+        },
       };
 
       if (request.id === null) {
@@ -69,6 +91,23 @@ export class ApplicationCommandService {
     return { siteId, snapshot: toRendererSnapshot(state) };
   }
 
+  async setSiteLifecycle(request: SiteLifecycleRequest): Promise<SnapshotResponse> {
+    const state = await this.stateService.update((draft) => {
+      const site = draft.sites.find((candidate) => candidate.id === request.siteId);
+      if (!site) {
+        throw new ApplicationError('NOT_FOUND', 'The site no longer exists.', {
+          field: 'siteId',
+          recoverable: true,
+        });
+      }
+
+      site.lifecycle = request.lifecycle;
+      site.lifecycleChangedAt = request.occurredAt;
+    });
+
+    return { snapshot: toRendererSnapshot(state) };
+  }
+
   async deleteSite(siteId: string, occurredAt: string): Promise<SnapshotResponse> {
     const state = await this.stateService.update((draft) => {
       const site = draft.sites.find((candidate) => candidate.id === siteId);
@@ -85,6 +124,7 @@ export class ApplicationCommandService {
         if (Object.keys(dailyRecord).length === 0) delete draft.dailyRecords[date];
       }
       draft.activity = draft.activity.filter((entry) => entry.siteId !== siteId);
+      draft.payouts = (draft.payouts ?? []).filter((payout) => payout.siteId !== siteId);
       draft.activity.unshift({
         id: `activity_${randomUUID()}`,
         occurredAt,
@@ -96,6 +136,58 @@ export class ApplicationCommandService {
       draft.activity = draft.activity.slice(0, 500);
     });
 
+    return { snapshot: toRendererSnapshot(state) };
+  }
+
+  async upsertPayout(request: PayoutUpsertRequest): Promise<PayoutUpsertResponse> {
+    const payoutId = request.id ?? `payout_${randomUUID()}`;
+    const state = await this.stateService.update((draft) => {
+      const site = draft.sites.find((candidate) => candidate.id === request.siteId);
+      if (!site) {
+        throw new ApplicationError('NOT_FOUND', 'The payout site is unavailable.', {
+          field: 'siteId',
+          recoverable: true,
+        });
+      }
+
+      const payouts = (draft.payouts ??= []);
+      const existing =
+        request.id === null ? null : payouts.find((payout) => payout.id === request.id);
+      if (request.id !== null && !existing) {
+        throw new ApplicationError('NOT_FOUND', 'The payout entry no longer exists.', {
+          field: 'id',
+          recoverable: true,
+        });
+      }
+
+      const payout: PayoutEntry = {
+        id: payoutId,
+        siteId: request.siteId,
+        amountCents: request.amountCents,
+        expectedDate: request.expectedDate,
+        paidAt: request.paidAt,
+        createdAt: existing?.createdAt ?? request.occurredAt,
+        note: request.note,
+      };
+      if (existing) payouts[payouts.indexOf(existing)] = payout;
+      else payouts.push(payout);
+    });
+
+    return { payoutId, snapshot: toRendererSnapshot(state) };
+  }
+
+  async deletePayout(payoutId: string): Promise<SnapshotResponse> {
+    const state = await this.stateService.update((draft) => {
+      const payouts = (draft.payouts ??= []);
+      const index = payouts.findIndex((payout) => payout.id === payoutId);
+      if (index < 0) {
+        throw new ApplicationError('NOT_FOUND', 'The payout entry no longer exists.', {
+          field: 'payoutId',
+          recoverable: true,
+        });
+      }
+      payouts.splice(index, 1);
+    });
     return { snapshot: toRendererSnapshot(state) };
   }
 
@@ -219,6 +311,70 @@ export class ApplicationCommandService {
   async setImageCleanerFolder(folderPath: string): Promise<SnapshotResponse> {
     const state = await this.stateService.update((draft) => {
       draft.settings.imageCleaner.folderPath = folderPath;
+    });
+    return { snapshot: toRendererSnapshot(state) };
+  }
+
+  async setImageCompressorEnabled(enabled: boolean): Promise<SnapshotResponse> {
+    const state = await this.stateService.update((draft) => {
+      draft.settings.imageCompressor.enabled = enabled;
+    });
+    return { snapshot: toRendererSnapshot(state) };
+  }
+
+  async setImageCompressorFolder(folderPath: string): Promise<SnapshotResponse> {
+    const state = await this.stateService.update((draft) => {
+      draft.settings.imageCompressor.folderPath = folderPath;
+    });
+    return { snapshot: toRendererSnapshot(state) };
+  }
+
+  async upsertFacebookGroupShare(
+    request: FacebookGroupShareUpsertRequest,
+  ): Promise<FacebookGroupShareUpsertResponse> {
+    const groupId = request.id ?? `facebook_group_${randomUUID()}`;
+    const label = request.label.trim();
+    const groupUrl = normaliseFacebookGroupUrl(request.groupUrl);
+    const currentPostUrl = request.currentPostUrl?.trim()
+      ? normaliseFacebookPostUrl(request.currentPostUrl)
+      : null;
+
+    const state = await this.stateService.update((draft) => {
+      const groups = draft.settings.facebookGroupShares.groups;
+      const existing =
+        request.id === null ? null : groups.find((candidate) => candidate.id === request.id);
+      if (request.id !== null && !existing) {
+        throw new ApplicationError('NOT_FOUND', 'The Facebook group no longer exists.', {
+          field: 'id',
+          recoverable: true,
+        });
+      }
+
+      const nextGroup = {
+        id: groupId,
+        label,
+        groupUrl,
+        currentPostUrl,
+        useMostRecentPost: request.useMostRecentPost,
+      };
+      if (existing) groups[groups.indexOf(existing)] = nextGroup;
+      else groups.push(nextGroup);
+    });
+
+    return { groupId, snapshot: toRendererSnapshot(state) };
+  }
+
+  async deleteFacebookGroupShare(groupId: string): Promise<SnapshotResponse> {
+    const state = await this.stateService.update((draft) => {
+      const groups = draft.settings.facebookGroupShares.groups;
+      const index = groups.findIndex((group) => group.id === groupId);
+      if (index < 0) {
+        throw new ApplicationError('NOT_FOUND', 'The Facebook group no longer exists.', {
+          field: 'groupId',
+          recoverable: true,
+        });
+      }
+      groups.splice(index, 1);
     });
     return { snapshot: toRendererSnapshot(state) };
   }
@@ -369,25 +525,36 @@ export class ApplicationCommandService {
 
   async setTaskCompletions(date: string, items: TaskCompletionItem[]): Promise<SnapshotResponse> {
     const state = await this.stateService.update((draft) => {
+      const categoriesById = new Map<string, TaskCategory>();
+      const categoryIdsBySiteId = new Map<string, string[]>();
+
+      for (const category of draft.taskCategories) {
+        categoriesById.set(category.id, category);
+        for (const site of category.sites) {
+          const categoryIds = categoryIdsBySiteId.get(site.id);
+          if (categoryIds) categoryIds.push(category.id);
+          else categoryIdsBySiteId.set(site.id, [category.id]);
+        }
+      }
+
+      const day = (draft.taskDailyRecords[date] ??= {});
       for (const item of items) {
-        const category = draft.taskCategories.find((candidate) => candidate.id === item.categoryId);
-        if (!category) {
+        if (!categoriesById.has(item.categoryId)) {
           throw new ApplicationError('NOT_FOUND', 'The task category no longer exists.', {
             field: 'categoryId',
             recoverable: true,
           });
         }
-        if (!category.sites.some((site) => site.id === item.siteId)) {
+        const categoryIds = categoryIdsBySiteId.get(item.siteId);
+        if (!categoryIds?.includes(item.categoryId)) {
           throw new ApplicationError('NOT_FOUND', 'The task site no longer exists.', {
             field: 'siteId',
             recoverable: true,
           });
         }
 
-        const day = (draft.taskDailyRecords[date] ??= {});
-        for (const membership of draft.taskCategories) {
-          if (!membership.sites.some((site) => site.id === item.siteId)) continue;
-          const categoryState = (day[membership.id] ??= {});
+        for (const categoryId of categoryIds) {
+          const categoryState = (day[categoryId] ??= {});
           categoryState[item.siteId] = item.done;
         }
       }
@@ -406,9 +573,10 @@ function normaliseSharedTaskSites(
   incomingSites: readonly TaskSite[],
 ): TaskSite[] {
   const normalised = new Map<string, TaskSite>();
+  const sharedIndex = buildSharedTaskSiteIndex(state);
 
   for (const incoming of incomingSites) {
-    const existing = findSharedTaskSite(state, incoming);
+    const existing = findSharedTaskSite(sharedIndex, incoming);
     const site: TaskSite = {
       ...(existing ? structuredClone(existing) : {}),
       ...structuredClone(incoming),
@@ -426,16 +594,48 @@ function normaliseSharedTaskSites(
   return [...normalised.values()];
 }
 
-function findSharedTaskSite(state: AppStateV1, incoming: TaskSite): TaskSite | null {
+interface SharedTaskSiteIndexEntry {
+  site: TaskSite;
+  order: number;
+}
+
+interface SharedTaskSiteIndex {
+  byId: Map<string, SharedTaskSiteIndexEntry>;
+  bySourceSiteId: Map<string, SharedTaskSiteIndexEntry>;
+}
+
+function buildSharedTaskSiteIndex(state: AppStateV1): SharedTaskSiteIndex {
+  const byId = new Map<string, SharedTaskSiteIndexEntry>();
+  const bySourceSiteId = new Map<string, SharedTaskSiteIndexEntry>();
+  let order = 0;
+
   for (const category of state.taskCategories) {
-    const match = category.sites.find(
-      (site) =>
-        site.id === incoming.id ||
-        (incoming.sourceSiteId !== undefined && site.sourceSiteId === incoming.sourceSiteId),
-    );
-    if (match) return match;
+    for (const site of category.sites) {
+      const entry = { site, order };
+      if (!byId.has(site.id)) byId.set(site.id, entry);
+      if (site.sourceSiteId !== undefined && !bySourceSiteId.has(site.sourceSiteId)) {
+        bySourceSiteId.set(site.sourceSiteId, entry);
+      }
+      order += 1;
+    }
   }
-  return null;
+
+  return { byId, bySourceSiteId };
+}
+
+function findSharedTaskSite(index: SharedTaskSiteIndex, incoming: TaskSite): TaskSite | null {
+  const idMatch = index.byId.get(incoming.id);
+  const sourceMatch =
+    incoming.sourceSiteId === undefined
+      ? undefined
+      : index.bySourceSiteId.get(incoming.sourceSiteId);
+  const match =
+    idMatch && sourceMatch
+      ? idMatch.order <= sourceMatch.order
+        ? idMatch
+        : sourceMatch
+      : (idMatch ?? sourceMatch);
+  return match?.site ?? null;
 }
 
 function synchroniseSharedTaskSites(state: AppStateV1, sharedSites: readonly TaskSite[]): void {
@@ -452,6 +652,12 @@ function requireSite(state: AppStateV1, siteId: string): Site {
   const site = state.sites.find((candidate) => candidate.id === siteId);
   if (!site) {
     throw new ApplicationError('NOT_FOUND', 'The site no longer exists.', {
+      field: 'siteId',
+      recoverable: true,
+    });
+  }
+  if ((site.lifecycle ?? 'active') !== 'active') {
+    throw new ApplicationError('NOT_FOUND', 'That site is not active.', {
       field: 'siteId',
       recoverable: true,
     });
@@ -491,4 +697,49 @@ function localDateKey(timestamp: string): string {
     String(date.getMonth() + 1).padStart(2, '0'),
     String(date.getDate()).padStart(2, '0'),
   ].join('-');
+}
+
+function normaliseFacebookGroupUrl(value: string): string {
+  const url = parseFacebookUrl(value, 'groupUrl');
+  const parts = url.pathname.split('/').filter(Boolean);
+  const groupIndex = parts.findIndex((part) => part.toLowerCase() === 'groups');
+  const groupId = groupIndex >= 0 ? parts[groupIndex + 1] : null;
+  if (!groupId) {
+    throw new ApplicationError('VALIDATION_FAILED', 'Enter a Facebook group URL.', {
+      field: 'groupUrl',
+      recoverable: true,
+    });
+  }
+  return `https://www.facebook.com/groups/${encodeURIComponent(groupId)}/`;
+}
+
+function normaliseFacebookPostUrl(value: string): string {
+  const url = parseFacebookUrl(value, 'currentPostUrl');
+  url.protocol = 'https:';
+  url.hostname = 'www.facebook.com';
+  url.username = '';
+  url.password = '';
+  return url.toString();
+}
+
+function parseFacebookUrl(value: string, field: string): URL {
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      throw new Error('Unsupported protocol');
+    }
+    if (!/(^|\.)facebook\.com$/i.test(url.hostname)) {
+      throw new Error('Not Facebook');
+    }
+    if (url.username || url.password) {
+      throw new Error('Credentials are not allowed');
+    }
+    return url;
+  } catch (error: unknown) {
+    throw new ApplicationError('VALIDATION_FAILED', 'Enter a valid Facebook URL.', {
+      field,
+      recoverable: true,
+      cause: error,
+    });
+  }
 }

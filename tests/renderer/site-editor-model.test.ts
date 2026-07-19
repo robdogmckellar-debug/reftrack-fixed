@@ -31,6 +31,14 @@ describe('site editor model', () => {
       dateFormat: 'dd/mm hh:MM',
       bonus: '30.00',
       maxCopiesPerDay: '2',
+      notes: '',
+      payoutThreshold: '0.00',
+      appClaimEnabled: false,
+      appClaimDownloadUrl: '',
+      appClaimApkPath: '',
+      appClaimPackageName: '',
+      appClaimDeepLinkUrl: '',
+      appClaimAvdName: '',
     });
   });
 
@@ -44,6 +52,8 @@ describe('site editor model', () => {
         dateFormat: '',
         bonus: '30.50',
         maxCopiesPerDay: '2',
+        notes: 'Pays monthly',
+        payoutThreshold: '100.00',
       },
       'site-alpha',
     );
@@ -58,6 +68,16 @@ describe('site editor model', () => {
       dateFormat: '',
       bonusCents: 3050,
       maxCopiesPerDay: 2,
+      notes: 'Pays monthly',
+      payoutThresholdCents: 10000,
+      appClaim: {
+        enabled: false,
+        downloadUrl: '',
+        apkPath: null,
+        packageName: '',
+        deepLinkUrl: '',
+        avdName: '',
+      },
     });
   });
 
@@ -90,6 +110,14 @@ describe('site editor model', () => {
         dateFormat: 'yyyy-mm-dd hh:MM:ss',
         bonus: '30.00',
         maxCopiesPerDay: '1',
+        notes: '',
+        payoutThreshold: '0.00',
+        appClaimEnabled: false,
+        appClaimDownloadUrl: '',
+        appClaimApkPath: '',
+        appClaimPackageName: '',
+        appClaimDeepLinkUrl: '',
+        appClaimAvdName: '',
       },
       new Date(2026, 5, 30, 9, 5, 7),
     );

@@ -5,10 +5,11 @@ import type {
   RendererTaskCategory,
   RendererTaskSite,
 } from '../../../shared/view-model/renderer-snapshot';
-import { publishSnapshot, rendererSnapshot } from '../../app/store';
+import { navigateTo, publishSnapshot, rendererSnapshot } from '../../app/store';
 import { BulkCategoryDialog } from '../../components/BulkCategoryDialog';
 import {
   CheckIcon,
+  ClipboardIcon,
   ExternalLinkIcon,
   ImportIcon,
   PlusIcon,
@@ -23,6 +24,7 @@ import {
   newCategoryDetails,
   selectedTaskSites as resolveSelectedTaskSites,
 } from '../../lib/task-membership';
+import { queueTaskSites } from '../share-queue/share-queue-store';
 import {
   categoryProgress,
   categoryStatus,
@@ -67,7 +69,7 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
   );
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedSiteIds, setSelectedSiteIds] = useState<ReadonlySet<string>>(new Set());
-  const [bulkPending, setBulkPending] = useState<'open' | 'category' | null>(null);
+  const [bulkPending, setBulkPending] = useState<'open' | 'category' | 'share' | null>(null);
   const [categoryMembershipOpen, setCategoryMembershipOpen] = useState(false);
   const [editorCategory, setEditorCategory] = useState<RendererTaskCategory | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -88,24 +90,40 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
     () => globalTaskProgress(categories, dailyState, today),
     [categories, dailyState, today],
   );
+  const allTaskSiteIds = useMemo(() => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    for (const category of categories) {
+      for (const site of category.sites) {
+        if (seen.has(site.id)) continue;
+        seen.add(site.id);
+        ids.push(site.id);
+      }
+    }
+    return ids;
+  }, [categories]);
+  const firstCategoryIdBySiteId = useMemo(() => {
+    const bySiteId = new Map<string, string>();
+    for (const category of categories) {
+      for (const site of category.sites) {
+        if (!bySiteId.has(site.id)) bySiteId.set(site.id, category.id);
+      }
+    }
+    return bySiteId;
+  }, [categories]);
   const selectedSites = useMemo(
     () => resolveSelectedTaskSites(categories, selectedSiteIds),
     [categories, selectedSiteIds],
   );
-  const uniqueSiteCount = useMemo(
-    () => new Set(categories.flatMap((category) => category.sites.map((site) => site.id))).size,
-    [categories],
-  );
+  const uniqueSiteCount = allTaskSiteIds.length;
 
   useEffect(() => {
-    const validIds = new Set(
-      categories.flatMap((category) => category.sites.map((site) => site.id)),
-    );
+    const validIds = new Set(allTaskSiteIds);
     setSelectedSiteIds((current) => {
       const next = new Set([...current].filter((siteId) => validIds.has(siteId)));
       return next.size === current.size ? current : next;
     });
-  }, [categories]);
+  }, [allTaskSiteIds]);
 
   const showFeedback = useCallback((tone: FeedbackTone, title: string, message?: string): void => {
     if (feedbackTimer.current !== null) window.clearTimeout(feedbackTimer.current);
@@ -133,9 +151,14 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
       setCheckinRunId(null);
       setCheckinStatus(null);
 
-      const success = event.results.filter((result) => result.status === 'success').length;
-      const failed = event.results.filter((result) => result.status === 'failed').length;
-      const skipped = event.results.filter((result) => result.status === 'skipped').length;
+      let success = 0;
+      let failed = 0;
+      let skipped = 0;
+      for (const result of event.results) {
+        if (result.status === 'success') success += 1;
+        else if (result.status === 'failed') failed += 1;
+        else if (result.status === 'skipped') skipped += 1;
+      }
       const detail = [
         failed ? `${failed} failed` : null,
         skipped ? `${skipped} skipped (no credentials)` : null,
@@ -278,13 +301,11 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
     const failures: string[] = [];
     try {
       for (const site of openable) {
-        const membership = categories.find((category) =>
-          category.sites.some((candidate) => candidate.id === site.id),
-        );
-        if (!membership) continue;
+        const categoryId = firstCategoryIdBySiteId.get(site.id);
+        if (!categoryId) continue;
         try {
           unwrapIpcResult(await window.reftrack.external.open({ url: site.url }));
-          completed.push({ categoryId: membership.id, siteId: site.id, done: true });
+          completed.push({ categoryId, siteId: site.id, done: true });
         } catch {
           failures.push(site.name);
         }
@@ -312,6 +333,27 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
     } finally {
       setBulkPending(null);
     }
+  };
+
+  const queueSelectedShares = (): void => {
+    if (bulkPending || selectedSites.length === 0) return;
+    setBulkPending('share');
+    const queued = queueTaskSites(selectedSites, snapshot?.sites ?? []);
+    setBulkPending(null);
+    if (queued === 0) {
+      showFeedback(
+        'info',
+        'No new sites queued',
+        'Selected sites may already be queued or missing URLs.',
+      );
+      return;
+    }
+    showFeedback(
+      'success',
+      `Queued ${queued} site${queued === 1 ? '' : 's'} for sharing`,
+      'Review posts in Facebook Group Shares before submitting manually.',
+    );
+    navigateTo('share');
   };
 
   const addSelectedToCategories = async (
@@ -694,13 +736,7 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
               variant="quiet"
               onClick={() => {
                 const allSelected = uniqueSiteCount > 0 && selectedSiteIds.size === uniqueSiteCount;
-                setSelectedSiteIds(
-                  allSelected
-                    ? new Set()
-                    : new Set(
-                        categories.flatMap((category) => category.sites.map((site) => site.id)),
-                      ),
-                );
+                setSelectedSiteIds(allSelected ? new Set() : new Set(allTaskSiteIds));
               }}
             >
               {uniqueSiteCount > 0 && selectedSiteIds.size === uniqueSiteCount
@@ -712,11 +748,25 @@ export function DailyTasksScreen({ active }: { active: boolean }): JSX.Element {
               size="small"
               variant="secondary"
               pending={bulkPending === 'open'}
-              disabled={selectedSiteIds.size === 0 || bulkPending === 'category'}
+              disabled={
+                selectedSiteIds.size === 0 || (bulkPending !== null && bulkPending !== 'open')
+              }
               leadingIcon={<ExternalLinkIcon size={15} />}
               onClick={() => void openSelectedSites()}
             >
               Open sites
+            </Button>
+            <Button
+              size="small"
+              variant="secondary"
+              pending={bulkPending === 'share'}
+              disabled={
+                selectedSiteIds.size === 0 || (bulkPending !== null && bulkPending !== 'share')
+              }
+              leadingIcon={<ClipboardIcon size={15} />}
+              onClick={queueSelectedShares}
+            >
+              Queue share
             </Button>
             <Button
               size="small"

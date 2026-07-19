@@ -179,7 +179,8 @@ export function synchroniseDashboard(
   dateKey = dashboardDateKey.peek(),
 ): void {
   latestSnapshot = snapshot;
-  const nextIds = snapshot.sites.map((site) => site.id);
+  const activeSites = snapshot.sites.filter((site) => (site.lifecycle ?? 'active') === 'active');
+  const nextIds = activeSites.map((site) => site.id);
   const activeIds = new Set(nextIds);
   const nextActivity = snapshot.activity.slice(0, 50);
   const nextSummary = calculateSummary(snapshot, dateKey);
@@ -188,7 +189,7 @@ export function synchroniseDashboard(
     if (dashboardDateKey.peek() !== dateKey) dashboardDateKey.value = dateKey;
     if (!sameStringList(dashboardSiteIds.peek(), nextIds)) dashboardSiteIds.value = nextIds;
 
-    for (const site of snapshot.sites) {
+    for (const site of activeSites) {
       const siteTarget = ensureSiteSignal(site.id);
       if (!sameSite(siteTarget.peek(), site)) siteTarget.value = site;
 

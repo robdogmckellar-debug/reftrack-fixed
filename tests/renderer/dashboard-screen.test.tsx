@@ -64,6 +64,8 @@ interface ApiMocks {
   undoSuccess: ReturnType<typeof vi.fn>;
   clearActivity: ReturnType<typeof vi.fn>;
   openExternal: ReturnType<typeof vi.fn>;
+  launchAndroidPackage: ReturnType<typeof vi.fn>;
+  openAndroidDeepLink: ReturnType<typeof vi.fn>;
   addSitesToCategories: ReturnType<typeof vi.fn>;
 }
 
@@ -73,10 +75,17 @@ function installApi(): ApiMocks {
   const undoSuccess = vi.fn();
   const clearActivity = vi.fn();
   const openExternal = vi.fn().mockResolvedValue({ ok: true, data: { opened: true } });
+  const launchAndroidPackage = vi.fn().mockResolvedValue({ ok: true, data: { launched: true } });
+  const openAndroidDeepLink = vi.fn().mockResolvedValue({ ok: true, data: { opened: true } });
   const addSitesToCategories = vi.fn();
   const api = {
     bootstrap: vi.fn(),
-    sites: { upsert: vi.fn(), delete: vi.fn() },
+    sites: {
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      launchAndroidPackage,
+      openAndroidDeepLink,
+    },
     activity: { clear: clearActivity },
     actions: { copyLink, recordSuccess, undoSuccess },
     settings: { setImageCleanerEnabled: vi.fn(), selectImageCleanerFolder: vi.fn() },
@@ -107,6 +116,8 @@ function installApi(): ApiMocks {
     undoSuccess,
     clearActivity,
     openExternal,
+    launchAndroidPackage,
+    openAndroidDeepLink,
     addSitesToCategories,
   };
 }
@@ -249,6 +260,48 @@ describe('DashboardScreen', () => {
     expect(mocks.openExternal).toHaveBeenNthCalledWith(2, {
       url: 'https://bravo.example/ref',
     });
+  });
+
+  it('launches the Android app instead of the browser when an app-claim site name is opened', async () => {
+    const mocks = installApi();
+    publishSnapshot(
+      createSnapshot({
+        sites: [
+          {
+            id: 'site-alpha',
+            name: 'Alpha',
+            url: 'https://alpha.example/ref',
+            prefix: 'Join',
+            suffix: '',
+            dateFormat: '',
+            bonus: 30,
+            maxCopiesPerDay: 1,
+            copies: 0,
+            successes: 0,
+            earnings: 0,
+            appClaim: {
+              enabled: true,
+              downloadUrl: '',
+              apkPath: 'C:\\Apps\\alpha.apk',
+              packageName: 'com.alpha.claim',
+              deepLinkUrl: '',
+              avdName: 'Pixel_8_API_35',
+            },
+          },
+        ],
+      }),
+    );
+    render(<DashboardScreen active />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Alpha' }));
+
+    await waitFor(() =>
+      expect(mocks.launchAndroidPackage).toHaveBeenCalledWith({
+        packageName: 'com.alpha.claim',
+        avdName: 'Pixel_8_API_35',
+      }),
+    );
+    expect(mocks.openExternal).not.toHaveBeenCalled();
   });
 
   it('adds selected referral cards to a new Daily Tasks category', async () => {

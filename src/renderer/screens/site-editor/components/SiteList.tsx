@@ -9,8 +9,11 @@ interface SiteListProps {
   sites: readonly RendererSite[];
   selectedSiteId: string | null;
   creating: boolean;
+  lifecycle: 'active' | 'archived' | 'trashed';
+  counts: Record<'active' | 'archived' | 'trashed', number>;
   onCreate(): boolean;
   onSelect(siteId: string): boolean;
+  onLifecycleChange(lifecycle: 'active' | 'archived' | 'trashed'): void;
 }
 
 function copyLimitLabel(limit: number): string {
@@ -22,8 +25,11 @@ export function SiteList({
   sites,
   selectedSiteId,
   creating,
+  lifecycle,
+  counts,
   onCreate,
   onSelect,
+  onLifecycleChange,
 }: SiteListProps): JSX.Element {
   const handleKeyDown = (
     event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
@@ -59,9 +65,7 @@ export function SiteList({
         <div>
           <span class="site-editor-eyebrow">Site library</span>
           <h1>Referral sites</h1>
-          <p>
-            {sites.length} site{sites.length === 1 ? '' : 's'} configured
-          </p>
+          <p>{sites.length} shown</p>
         </div>
         <Button
           variant="primary"
@@ -72,6 +76,28 @@ export function SiteList({
           Add site
         </Button>
       </header>
+
+      <div class="site-editor-lifecycle-tabs" role="tablist" aria-label="Site status">
+        {(
+          [
+            ['active', 'Active'],
+            ['archived', 'Archived'],
+            ['trashed', 'Recycle bin'],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={lifecycle === value}
+            class={lifecycle === value ? 'is-selected' : ''}
+            onClick={() => onLifecycleChange(value)}
+          >
+            <span>{label}</span>
+            <strong>{counts[value]}</strong>
+          </button>
+        ))}
+      </div>
 
       {creating ? (
         <div class="site-editor-new-indicator" role="status">
@@ -119,11 +145,19 @@ export function SiteList({
       ) : (
         <div class="site-editor-list-empty">
           <EditIcon size={28} />
-          <strong>No sites configured</strong>
-          <p>Add your first referral site to make it available on the Dashboard.</p>
-          <Button variant="primary" onClick={() => onCreate()}>
-            Add first site
-          </Button>
+          <strong>{lifecycle === 'active' ? 'No active sites' : `No ${lifecycle} sites`}</strong>
+          <p>
+            {lifecycle === 'active'
+              ? 'Add your first referral site to make it available on the Dashboard.'
+              : lifecycle === 'archived'
+                ? 'Archived sites stay here until you restore or recycle them.'
+                : 'Deleted sites stay recoverable until you remove them forever.'}
+          </p>
+          {lifecycle === 'active' ? (
+            <Button variant="primary" onClick={() => onCreate()}>
+              Add first site
+            </Button>
+          ) : null}
         </div>
       )}
     </aside>

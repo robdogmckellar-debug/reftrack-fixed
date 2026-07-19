@@ -9,6 +9,18 @@ interface ActivityFeedProps {
   onClear(): void;
 }
 
+const TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+const SHORT_DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 function localDateKey(date: Date): string {
   return [
     String(date.getFullYear()).padStart(4, '0'),
@@ -21,10 +33,7 @@ function formatOccurredAt(value: string, now = new Date()): string {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return 'Unknown time';
 
-  const time = new Intl.DateTimeFormat(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+  const time = TIME_FORMATTER.format(date);
   const today = localDateKey(now);
   const yesterdayDate = new Date(now);
   yesterdayDate.setDate(yesterdayDate.getDate() - 1);
@@ -33,12 +42,7 @@ function formatOccurredAt(value: string, now = new Date()): string {
   if (dateKey === today) return `Today, ${time}`;
   if (dateKey === localDateKey(yesterdayDate)) return `Yesterday, ${time}`;
 
-  return new Intl.DateTimeFormat(undefined, {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+  return SHORT_DATE_TIME_FORMATTER.format(date);
 }
 
 function activityDescription(entry: RendererActivityEntry): JSX.Element {
@@ -67,7 +71,7 @@ function activityDescription(entry: RendererActivityEntry): JSX.Element {
   }
 }
 
-function ActivityEntry({ entry }: { entry: RendererActivityEntry }): JSX.Element {
+function ActivityEntry({ entry, now }: { entry: RendererActivityEntry; now: Date }): JSX.Element {
   const Icon =
     entry.type === 'copy' ? ClipboardIcon : entry.type === 'success' ? SuccessIcon : TrashIcon;
 
@@ -79,7 +83,7 @@ function ActivityEntry({ entry }: { entry: RendererActivityEntry }): JSX.Element
       <span class="dashboard-activity__entry-copy">
         <span class="dashboard-activity__description">{activityDescription(entry)}</span>
         <time class="dashboard-activity__time" dateTime={entry.occurredAt}>
-          {formatOccurredAt(entry.occurredAt)}
+          {formatOccurredAt(entry.occurredAt, now)}
         </time>
       </span>
     </li>
@@ -89,6 +93,7 @@ function ActivityEntry({ entry }: { entry: RendererActivityEntry }): JSX.Element
 export function ActivityFeed({ onClear }: ActivityFeedProps): JSX.Element {
   const activity = dashboardActivity.value;
   const pending = activityClearPending.value;
+  const now = new Date();
 
   return (
     <aside class="dashboard-activity" aria-labelledby="dashboard-activity-title">
@@ -121,7 +126,7 @@ export function ActivityFeed({ onClear }: ActivityFeedProps): JSX.Element {
       ) : (
         <ol class="dashboard-activity__list" aria-label="Recent RefTrack activity">
           {activity.map((entry) => (
-            <ActivityEntry key={entry.id} entry={entry} />
+            <ActivityEntry key={entry.id} entry={entry} now={now} />
           ))}
         </ol>
       )}

@@ -105,6 +105,14 @@ const DEFAULT_STATE: AppStateV1 = {
       folderPath: null,
       hotkey: null,
     },
+    imageCompressor: {
+      enabled: false,
+      folderPath: null,
+      quality: 70,
+    },
+    facebookGroupShares: {
+      groups: [],
+    },
     checkin: { ...DEFAULT_CHECKIN_SETTINGS },
     hotkeys: {
       enabled: true,
@@ -114,6 +122,7 @@ const DEFAULT_STATE: AppStateV1 = {
   taskCategories: [],
   taskDailyRecords: {},
   checkinDailyRecords: {},
+  payouts: [],
 };
 
 export function createDefaultAppState(): AppStateV1 {

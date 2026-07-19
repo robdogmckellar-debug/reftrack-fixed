@@ -1,6 +1,15 @@
 import path from 'node:path';
 
-import { app, clipboard, dialog, ipcMain, Notification, safeStorage, shell } from 'electron';
+import {
+  app,
+  clipboard,
+  dialog,
+  ipcMain,
+  nativeImage,
+  Notification,
+  safeStorage,
+  shell,
+} from 'electron';
 import type { BrowserWindow, IpcMainInvokeEvent, OpenDialogOptions } from 'electron';
 import { z } from 'zod';
 
@@ -10,6 +19,7 @@ import type {
   ApplicationInfo,
   ImageCleanupStart,
   SelectImageCleanerFolderResponse,
+  SelectImageCompressorFolderResponse,
 } from '../../shared/ipc/contract';
 import type { IpcFailure, IpcResult } from '../../shared/ipc/result';
 import {
@@ -20,16 +30,26 @@ import {
   CheckinSaveCredentialsRequestSchema,
   CheckinStartRequestSchema,
   CopyLinkRequestSchema,
+  CopyTextRequestSchema,
   EmptyRequestSchema,
+  FacebookGroupShareDeleteRequestSchema,
+  FacebookGroupShareUpsertRequestSchema,
+  InstallApkRequestSchema,
   ImporterCancelRequestSchema,
   ImporterStartRequestSchema,
+  LaunchAndroidPackageRequestSchema,
   OpenExternalRequestSchema,
+  OpenAndroidDeepLinkRequestSchema,
+  PayoutDeleteRequestSchema,
+  PayoutUpsertRequestSchema,
   RecordSuccessRequestSchema,
   SetCheckinScheduleRequestSchema,
   SetHotkeysRequestSchema,
+  SetImageCompressorEnabledRequestSchema,
   SetImageCleanerEnabledRequestSchema,
   SetImageCleanerHotkeyRequestSchema,
   SiteDeleteRequestSchema,
+  SiteLifecycleRequestSchema,
   SiteUpsertRequestSchema,
   TaskCategoryDeleteRequestSchema,
   TaskCategoryUpsertRequestSchema,
@@ -43,12 +63,17 @@ import { CredentialStore } from '../checkin/credential-store';
 import type { CredentialCrypto } from '../checkin/credential-store';
 import { DailyCheckinScheduler } from '../checkin/daily-checkin-scheduler';
 import { ImportCoordinator } from '../importer/import-coordinator';
+import { AndroidEmulatorService } from '../services/android-emulator-service';
 import { ApplicationCommandService } from '../services/application-command-service';
 import { CopyActionService } from '../services/copy-action-service';
 import { ApplicationError } from '../services/application-error';
 import type { HotkeyService } from '../services/hotkey-service';
 import { ImageCleanerService, ImageCleanupCoordinator } from '../services/image-cleaner-service';
 import { ImageCleanerHotkey } from '../services/image-cleaner-hotkey';
+import {
+  ImageCompressorService,
+  ImageCompressorWatcher,
+} from '../services/image-compressor-service';
 import type { StateService } from '../services/state-service';
 import { assertTrustedIpcSender } from './validate-sender';
 import { validateExternalUrl } from './url-policy';
@@ -75,8 +100,28 @@ export interface IpcHandlerRegistration {
 
 export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHandlerRegistration {
   const commands = new ApplicationCommandService(options.stateService);
+  const androidEmulator = new AndroidEmulatorService();
   const imageCleaner = new ImageCleanerService({
     trashItem: (filePath) => shell.trashItem(filePath),
+  });
+  const imageCompressor = new ImageCompressorWatcher({
+    service: new ImageCompressorService({
+      convertToJpeg: async (filePath, quality) => {
+        const image = nativeImage.createFromPath(filePath);
+        if (image.isEmpty()) {
+          throw new ApplicationError(
+            'IMAGE_COMPRESSION_FAILED',
+            'That image could not be loaded.',
+            { field: 'folderPath', recoverable: true },
+          );
+        }
+        return image.toJPEG(quality);
+      },
+    }),
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'Image compression failed.';
+      console.warn('[RefTrack] Image Compressor:', message);
+    },
   });
   const cleanupCoordinator = new ImageCleanupCoordinator({
     cleaner: imageCleaner,
@@ -89,7 +134,7 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
   const copyActions = new CopyActionService({
     commands,
     cleanupCoordinator,
-    writeClipboard: (text) => clipboard.writeText(text),
+    writeClipboard: (text, imagePath) => writeShareClipboard(text, imagePath),
   });
   const importer = new ImportCoordinator({
     workerPath: options.importerWorkerPath,
@@ -222,15 +267,104 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
     syncHotkeys();
     return response;
   });
+  registerHandler(IPC_CHANNELS.sitesSetLifecycle, SiteLifecycleRequestSchema, async (request) => {
+    const response = await commands.setSiteLifecycle(request);
+    syncHotkeys();
+    return response;
+  });
   registerHandler(IPC_CHANNELS.sitesDelete, SiteDeleteRequestSchema, async (request) => {
     const response = await commands.deleteSite(request.siteId, request.occurredAt);
     syncHotkeys();
     return response;
   });
+  registerHandler(
+    IPC_CHANNELS.sitesSelectApk,
+    EmptyRequestSchema,
+    async (): Promise<{ selected: boolean; filePath: string | null }> => {
+      const ownerWindow = options.getMainWindow();
+      const dialogOptions: OpenDialogOptions = {
+        properties: ['openFile'],
+        title: 'Select an Android APK',
+        filters: [
+          { name: 'Android APK', extensions: ['apk'] },
+          { name: 'All files', extensions: ['*'] },
+        ],
+      };
+      const result = ownerWindow
+        ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
+        : await dialog.showOpenDialog(dialogOptions);
+
+      return {
+        selected: !result.canceled && result.filePaths.length > 0,
+        filePath: result.filePaths[0] ?? null,
+      };
+    },
+  );
+  registerHandler(IPC_CHANNELS.sitesInstallApk, InstallApkRequestSchema, async (request) => {
+    const packageName = await androidEmulator.installApk(request.apkPath, request.avdName ?? null);
+    return { installed: true as const, packageName };
+  });
+  registerHandler(
+    IPC_CHANNELS.sitesLaunchAndroidPackage,
+    LaunchAndroidPackageRequestSchema,
+    async (request) => {
+      await androidEmulator.launchPackage(request.packageName, request.avdName ?? null);
+      return { launched: true as const };
+    },
+  );
+  registerHandler(
+    IPC_CHANNELS.sitesOpenAndroidDeepLink,
+    OpenAndroidDeepLinkRequestSchema,
+    async (request) => {
+      await androidEmulator.openDeepLink(request.url, request.avdName ?? null);
+      return { opened: true as const };
+    },
+  );
   registerHandler(IPC_CHANNELS.activityClear, EmptyRequestSchema, () => commands.clearActivity());
+  registerHandler(IPC_CHANNELS.payoutsUpsert, PayoutUpsertRequestSchema, (request) =>
+    commands.upsertPayout(request),
+  );
+  registerHandler(IPC_CHANNELS.payoutsDelete, PayoutDeleteRequestSchema, (request) =>
+    commands.deletePayout(request.payoutId),
+  );
 
   registerHandler(IPC_CHANNELS.actionsCopyLink, CopyLinkRequestSchema, (request) =>
     copyActions.copy(request),
+  );
+  registerHandler(IPC_CHANNELS.actionsCopyText, CopyTextRequestSchema, (request) => {
+    try {
+      writeShareClipboard(request.text, request.imagePath);
+      return { copied: true as const };
+    } catch (error: unknown) {
+      throw new ApplicationError('CLIPBOARD_FAILED', 'Windows could not update the clipboard.', {
+        recoverable: true,
+        cause: error,
+      });
+    }
+  });
+
+  registerHandler(
+    IPC_CHANNELS.actionsSelectShareImage,
+    EmptyRequestSchema,
+    async (): Promise<{ selected: boolean; filePath: string | null }> => {
+      const ownerWindow = options.getMainWindow();
+      const dialogOptions: OpenDialogOptions = {
+        properties: ['openFile'],
+        title: 'Select a share image',
+        filters: [
+          { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] },
+          { name: 'All files', extensions: ['*'] },
+        ],
+      };
+      const result = ownerWindow
+        ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
+        : await dialog.showOpenDialog(dialogOptions);
+
+      return {
+        selected: !result.canceled && result.filePaths.length > 0,
+        filePath: result.filePaths[0] ?? null,
+      };
+    },
   );
 
   registerHandler(IPC_CHANNELS.actionsRecordSuccess, RecordSuccessRequestSchema, (request) =>
@@ -244,6 +378,16 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
     IPC_CHANNELS.settingsSetImageCleanerEnabled,
     SetImageCleanerEnabledRequestSchema,
     (request) => commands.setImageCleanerEnabled(request.enabled),
+  );
+
+  registerHandler(
+    IPC_CHANNELS.settingsSetImageCompressorEnabled,
+    SetImageCompressorEnabledRequestSchema,
+    async (request) => {
+      const response = await commands.setImageCompressorEnabled(request.enabled);
+      syncImageCompressor(response.snapshot.settings);
+      return response;
+    },
   );
 
   registerHandler(IPC_CHANNELS.settingsSetHotkeys, SetHotkeysRequestSchema, async (request) => {
@@ -298,6 +442,60 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
       const response = await commands.setImageCleanerFolder(folderPath);
       return { selected: true, folderPath, snapshot: response.snapshot };
     },
+  );
+
+  registerHandler(
+    IPC_CHANNELS.settingsSelectImageCompressorFolder,
+    EmptyRequestSchema,
+    async (): Promise<SelectImageCompressorFolderResponse> => {
+      const ownerWindow = options.getMainWindow();
+      const dialogOptions: OpenDialogOptions = {
+        properties: ['openDirectory'],
+        title: 'Select a dedicated image compression folder',
+      };
+      let result;
+      try {
+        result = ownerWindow
+          ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
+          : await dialog.showOpenDialog(dialogOptions);
+      } catch (error: unknown) {
+        throw new ApplicationError('FOLDER_SELECTION_FAILED', 'The folder picker could not open.', {
+          recoverable: true,
+          cause: error,
+        });
+      }
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return {
+          selected: false,
+          folderPath: commands.getRendererSnapshot().settings.imageCompressorPath ?? null,
+          snapshot: commands.getRendererSnapshot(),
+        };
+      }
+
+      const selectedPath = result.filePaths[0];
+      if (!selectedPath) {
+        throw new ApplicationError('FOLDER_SELECTION_FAILED', 'No folder was selected.', {
+          recoverable: true,
+        });
+      }
+      const folderPath = await imageCleaner.validateFolder(selectedPath);
+      const response = await commands.setImageCompressorFolder(folderPath);
+      syncImageCompressor(response.snapshot.settings);
+      return { selected: true, folderPath, snapshot: response.snapshot };
+    },
+  );
+
+  registerHandler(
+    IPC_CHANNELS.settingsUpsertFacebookGroupShare,
+    FacebookGroupShareUpsertRequestSchema,
+    (request) => commands.upsertFacebookGroupShare(request),
+  );
+
+  registerHandler(
+    IPC_CHANNELS.settingsDeleteFacebookGroupShare,
+    FacebookGroupShareDeleteRequestSchema,
+    (request) => commands.deleteFacebookGroupShare(request.groupId),
   );
 
   registerHandler(IPC_CHANNELS.imageCleanerRun, EmptyRequestSchema, () => runImageCleanup());
@@ -437,9 +635,13 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
   }));
 
   return {
-    startBackgroundServices: () => checkinScheduler.start(),
+    startBackgroundServices: () => {
+      checkinScheduler.start();
+      syncImageCompressor(commands.getRendererSnapshot().settings);
+    },
     dispose: () => {
       importer.dispose();
+      imageCompressor.dispose();
       imageCleanerHotkey.dispose();
       checkinScheduler.dispose();
       checkin.dispose();
@@ -449,6 +651,18 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions): IpcHan
 
   function syncHotkeys(): void {
     options.hotkeyService.sync(options.stateService.getSnapshot());
+  }
+
+  function syncImageCompressor(settings: {
+    imageCompressorEnabled?: boolean;
+    imageCompressorPath?: string | null;
+    imageCompressorQuality?: number;
+  }): void {
+    if (!settings.imageCompressorEnabled || !settings.imageCompressorPath) {
+      imageCompressor.dispose();
+      return;
+    }
+    imageCompressor.start(settings.imageCompressorPath, settings.imageCompressorQuality ?? 70);
   }
 
   function registerHandler<TSchema extends z.ZodTypeAny, TResponse>(
@@ -508,6 +722,35 @@ function showNotification(title: string, body: string): void {
   } catch {
     // Notifications are best-effort and must not interrupt background work.
   }
+}
+
+function writeShareClipboard(text: string, imagePath?: string | null): void {
+  if (!imagePath) {
+    clipboard.writeText(text);
+    return;
+  }
+
+  const image = nativeImage.createFromPath(imagePath);
+  if (image.isEmpty()) {
+    throw new ApplicationError('CLIPBOARD_FAILED', 'That image could not be loaded.', {
+      field: 'imagePath',
+      recoverable: true,
+    });
+  }
+
+  clipboard.write({ text, html: plainTextToHtml(text), image });
+}
+
+function plainTextToHtml(text: string): string {
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/\r\n|\r|\n/g, '<br>');
+
+  return `<meta charset="utf-8"><div>${escaped}</div>`;
 }
 
 function toIpcFailure(error: unknown): IpcFailure {

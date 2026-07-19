@@ -125,4 +125,24 @@ describe('Dashboard Signals store', () => {
     removeAlphaDaily();
     removeBravoDaily();
   });
+
+  it('keeps archived and recycled sites out of active dashboard workflows', () => {
+    const snapshot = createSnapshot();
+    snapshot.sites = [
+      snapshot.sites[0]!,
+      { ...snapshot.sites[1]!, lifecycle: 'archived' },
+      {
+        ...snapshot.sites[1]!,
+        id: 'site-c',
+        name: 'Charlie',
+        lifecycle: 'trashed',
+      },
+    ];
+
+    synchroniseDashboard(snapshot, '2026-06-30');
+
+    expect(visibleDashboardSiteIds.value).toEqual(['site-a']);
+    expect(siteSignalFor('site-b').value).toBeNull();
+    expect(siteSignalFor('site-c').value).toBeNull();
+  });
 });

@@ -5,6 +5,24 @@ export interface ImageCleanerSettings {
   hotkey: string | null;
 }
 
+export interface ImageCompressorSettings {
+  enabled: boolean;
+  folderPath: string | null;
+  quality: number;
+}
+
+export interface FacebookGroupShare {
+  id: string;
+  label: string;
+  groupUrl: string;
+  currentPostUrl: string | null;
+  useMostRecentPost: boolean;
+}
+
+export interface FacebookGroupShareSettings {
+  groups: FacebookGroupShare[];
+}
+
 /**
  * Shared configuration for the automated site check-in flow. Every targeted
  * site uses the same login/check-in system, so these paths and selectors are
@@ -38,6 +56,8 @@ export interface HotkeySettings {
 export interface AppSettings {
   darkMode: boolean;
   imageCleaner: ImageCleanerSettings;
+  imageCompressor: ImageCompressorSettings;
+  facebookGroupShares: FacebookGroupShareSettings;
   checkin: CheckinSettings;
   hotkeys: HotkeySettings;
 }

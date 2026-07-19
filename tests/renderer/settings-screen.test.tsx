@@ -47,6 +47,8 @@ interface ApiMocks {
   getInfo: ReturnType<typeof vi.fn>;
   setEnabled: ReturnType<typeof vi.fn>;
   selectFolder: ReturnType<typeof vi.fn>;
+  setCompressorEnabled: ReturnType<typeof vi.fn>;
+  selectCompressorFolder: ReturnType<typeof vi.fn>;
   setHotkey: ReturnType<typeof vi.fn>;
   setCheckinSchedule: ReturnType<typeof vi.fn>;
   runCleanup: ReturnType<typeof vi.fn>;
@@ -58,6 +60,8 @@ function installApi(): ApiMocks {
   const getInfo = vi.fn().mockResolvedValue({ ok: true, data: APPLICATION_INFO });
   const setEnabled = vi.fn();
   const selectFolder = vi.fn();
+  const setCompressorEnabled = vi.fn();
+  const selectCompressorFolder = vi.fn();
   const setHotkey = vi.fn();
   const setCheckinSchedule = vi.fn();
   const runCleanup = vi.fn();
@@ -71,6 +75,8 @@ function installApi(): ApiMocks {
     settings: {
       setImageCleanerEnabled: setEnabled,
       selectImageCleanerFolder: selectFolder,
+      setImageCompressorEnabled: setCompressorEnabled,
+      selectImageCompressorFolder: selectCompressorFolder,
       setImageCleanerHotkey: setHotkey,
       setCheckinSchedule,
     },
@@ -104,6 +110,8 @@ function installApi(): ApiMocks {
     getInfo,
     setEnabled,
     selectFolder,
+    setCompressorEnabled,
+    selectCompressorFolder,
     setHotkey,
     setCheckinSchedule,
     runCleanup,
@@ -128,7 +136,9 @@ describe('SettingsScreen', () => {
 
     expect(screen.getByRole('tabpanel', { name: 'Settings' })).toBeTruthy();
     expect(screen.getByRole('checkbox', { name: 'Enable cleanup after Copy Link' })).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: 'Enable automatic compression' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Safety boundaries' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Conversion rules' })).toBeTruthy();
     expect(screen.getByRole('list', { name: 'Supported image formats' })).toBeTruthy();
     expect(
       screen.getByText(
@@ -236,12 +246,59 @@ describe('SettingsScreen', () => {
 
     publishSnapshot(createSnapshot());
     render(<SettingsScreen active />);
-    fireEvent.click(screen.getByRole('button', { name: 'Choose folder' }));
+    const cleanerPanel = screen
+      .getByRole('heading', { name: 'Image Cleaner' })
+      .closest('section') as HTMLElement;
+    fireEvent.click(within(cleanerPanel).getByRole('button', { name: 'Choose folder' }));
 
     await waitFor(() => expect(mocks.selectFolder).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('Cleaner folder selected')).toBeTruthy();
     expect(screen.getAllByText(folderPath).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Change folder' })).toBeTruthy();
+  });
+
+  it('enables automatic image compression and selects its watched folder', async () => {
+    const mocks = installApi();
+    const folderPath = 'C:\\Users\\Test\\Pictures\\RefTrack Compressor';
+    const enabledSnapshot = createSnapshot({
+      revision: 13,
+      settings: {
+        darkMode: true,
+        folderClearEnabled: false,
+        folderClearPath: null,
+        imageCompressorEnabled: true,
+        imageCompressorPath: null,
+        imageCompressorQuality: 70,
+      },
+    });
+    const selectedSnapshot = createSnapshot({
+      revision: 14,
+      settings: {
+        ...enabledSnapshot.settings,
+        imageCompressorPath: folderPath,
+      },
+    });
+    mocks.setCompressorEnabled.mockResolvedValue({
+      ok: true,
+      data: { snapshot: enabledSnapshot },
+    });
+    mocks.selectCompressorFolder.mockResolvedValue({
+      ok: true,
+      data: { selected: true, folderPath, snapshot: selectedSnapshot },
+    });
+
+    publishSnapshot(createSnapshot());
+    render(<SettingsScreen active />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Enable automatic compression' }));
+
+    await waitFor(() => expect(mocks.setCompressorEnabled).toHaveBeenCalledWith({ enabled: true }));
+    expect(await screen.findByText('Image Compressor enabled')).toBeTruthy();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Choose folder' }).at(-1)!);
+
+    await waitFor(() => expect(mocks.selectCompressorFolder).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Compressor folder selected')).toBeTruthy();
+    expect(screen.getAllByText(folderPath).length).toBeGreaterThan(0);
   });
 
   it('disables manual cleanup until a folder is configured', () => {

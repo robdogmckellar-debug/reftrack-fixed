@@ -13,9 +13,11 @@ import './styles/dashboard-card-layout.css';
 import './styles/site-editor.css';
 import './styles/site-editor-layout.css';
 import './styles/statistics.css';
+import './styles/payouts.css';
 import './styles/settings.css';
 import './styles/daily-tasks.css';
 import './styles/text-file-import.css';
+import './styles/share-queue.css';
 
 const root = document.getElementById('app-root');
 if (!root) throw new Error('RefTrack renderer root was not found.');

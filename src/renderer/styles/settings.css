@@ -217,6 +217,12 @@
   color: var(--color-info);
 }
 
+.settings-panel__icon--orange {
+  border-color: rgba(255, 177, 97, 0.32);
+  background: rgba(255, 177, 97, 0.12);
+  color: #ffbd78;
+}
+
 .settings-control-card,
 .settings-folder-card,
 .settings-manual-run,

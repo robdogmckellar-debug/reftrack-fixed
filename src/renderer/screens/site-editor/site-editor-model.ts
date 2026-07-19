@@ -20,7 +20,21 @@ export const DATE_FORMAT_OPTIONS = [
 const DATE_FORMATS = new Set<string>(DATE_FORMAT_OPTIONS.map((option) => option.value));
 
 export type SiteEditorField =
-  'name' | 'url' | 'prefix' | 'suffix' | 'dateFormat' | 'bonus' | 'maxCopiesPerDay';
+  | 'name'
+  | 'url'
+  | 'prefix'
+  | 'suffix'
+  | 'dateFormat'
+  | 'bonus'
+  | 'maxCopiesPerDay'
+  | 'notes'
+  | 'payoutThreshold'
+  | 'appClaimEnabled'
+  | 'appClaimDownloadUrl'
+  | 'appClaimApkPath'
+  | 'appClaimPackageName'
+  | 'appClaimDeepLinkUrl'
+  | 'appClaimAvdName';
 
 export interface SiteEditorDraft {
   name: string;
@@ -30,6 +44,14 @@ export interface SiteEditorDraft {
   dateFormat: string;
   bonus: string;
   maxCopiesPerDay: string;
+  notes: string;
+  payoutThreshold: string;
+  appClaimEnabled: boolean;
+  appClaimDownloadUrl: string;
+  appClaimApkPath: string;
+  appClaimPackageName: string;
+  appClaimDeepLinkUrl: string;
+  appClaimAvdName: string;
 }
 
 export interface SiteEditorValidation {
@@ -47,6 +69,14 @@ export function createEmptySiteDraft(): SiteEditorDraft {
     dateFormat: '',
     bonus: '',
     maxCopiesPerDay: '1',
+    notes: '',
+    payoutThreshold: '0.00',
+    appClaimEnabled: false,
+    appClaimDownloadUrl: '',
+    appClaimApkPath: '',
+    appClaimPackageName: '',
+    appClaimDeepLinkUrl: '',
+    appClaimAvdName: '',
   };
 }
 
@@ -59,6 +89,14 @@ export function siteToDraft(site: RendererSite): SiteEditorDraft {
     dateFormat: site.dateFormat,
     bonus: site.bonus.toFixed(2),
     maxCopiesPerDay: String(site.maxCopiesPerDay),
+    notes: site.notes ?? '',
+    payoutThreshold: (site.payoutThreshold ?? 0).toFixed(2),
+    appClaimEnabled: site.appClaim?.enabled ?? false,
+    appClaimDownloadUrl: site.appClaim?.downloadUrl ?? '',
+    appClaimApkPath: site.appClaim?.apkPath ?? '',
+    appClaimPackageName: site.appClaim?.packageName ?? '',
+    appClaimDeepLinkUrl: site.appClaim?.deepLinkUrl ?? '',
+    appClaimAvdName: site.appClaim?.avdName ?? '',
   };
 }
 
@@ -70,7 +108,15 @@ export function sameSiteDraft(left: SiteEditorDraft, right: SiteEditorDraft): bo
     left.suffix === right.suffix &&
     left.dateFormat === right.dateFormat &&
     left.bonus === right.bonus &&
-    left.maxCopiesPerDay === right.maxCopiesPerDay
+    left.maxCopiesPerDay === right.maxCopiesPerDay &&
+    left.notes === right.notes &&
+    left.payoutThreshold === right.payoutThreshold &&
+    left.appClaimEnabled === right.appClaimEnabled &&
+    left.appClaimDownloadUrl === right.appClaimDownloadUrl &&
+    left.appClaimApkPath === right.appClaimApkPath &&
+    left.appClaimPackageName === right.appClaimPackageName &&
+    left.appClaimDeepLinkUrl === right.appClaimDeepLinkUrl &&
+    left.appClaimAvdName === right.appClaimAvdName
   );
 }
 
@@ -94,6 +140,13 @@ export function validateSiteDraft(draft: SiteEditorDraft, id: string | null): Si
   const suffix = draft.suffix.trim();
   const bonusText = draft.bonus.trim();
   const maxCopiesText = draft.maxCopiesPerDay.trim();
+  const notes = draft.notes ?? '';
+  const payoutThresholdText = draft.payoutThreshold ?? '0';
+  const appClaimDownloadUrl = (draft.appClaimDownloadUrl ?? '').trim();
+  const appClaimApkPath = (draft.appClaimApkPath ?? '').trim();
+  const appClaimPackageName = (draft.appClaimPackageName ?? '').trim();
+  const appClaimDeepLinkUrl = (draft.appClaimDeepLinkUrl ?? '').trim();
+  const appClaimAvdName = (draft.appClaimAvdName ?? '').trim();
 
   if (!name) errors.name = 'Enter a site name.';
   else if (name.length > 100) errors.name = 'Use 100 characters or fewer.';
@@ -112,6 +165,7 @@ export function validateSiteDraft(draft: SiteEditorDraft, id: string | null): Si
 
   if (draft.prefix.length > 500) errors.prefix = 'Use 500 characters or fewer.';
   if (draft.suffix.length > 500) errors.suffix = 'Use 500 characters or fewer.';
+  if (notes.length > 4000) errors.notes = 'Use 4,000 characters or fewer.';
   if (!DATE_FORMATS.has(draft.dateFormat)) errors.dateFormat = 'Choose a supported format.';
 
   const bonus = Number(bonusText);
@@ -131,14 +185,59 @@ export function validateSiteDraft(draft: SiteEditorDraft, id: string | null): Si
     errors.maxCopiesPerDay = 'The maximum supported limit is 1,000.';
   }
 
+  const payoutThreshold = Number(payoutThresholdText);
+  if (!payoutThresholdText) errors.payoutThreshold = 'Enter a threshold. Zero disables it.';
+  else if (!Number.isFinite(payoutThreshold) || payoutThreshold < 0) {
+    errors.payoutThreshold = 'Enter a non-negative amount.';
+  } else if (!Number.isSafeInteger(Math.round(payoutThreshold * 100))) {
+    errors.payoutThreshold = 'The amount is too large.';
+  } else if (!/^\d+(?:\.\d{0,2})?$/.test(payoutThresholdText)) {
+    errors.payoutThreshold = 'Use no more than two decimal places.';
+  }
+
+  if (appClaimDownloadUrl) {
+    validateCredentialFreeUrl(appClaimDownloadUrl, 'appClaimDownloadUrl', errors);
+  }
+  if (appClaimApkPath.length > 32767) {
+    errors.appClaimApkPath = 'Use 32,767 characters or fewer.';
+  } else if (appClaimApkPath && !appClaimApkPath.toLowerCase().endsWith('.apk')) {
+    errors.appClaimApkPath = 'Choose an APK file.';
+  }
+  if (
+    appClaimPackageName &&
+    !/^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/.test(appClaimPackageName)
+  ) {
+    errors.appClaimPackageName = 'Enter a valid Android package name.';
+  }
+  if (appClaimDeepLinkUrl) {
+    validateAppClaimLink(appClaimDeepLinkUrl, 'appClaimDeepLinkUrl', errors);
+  }
+  if (
+    appClaimAvdName &&
+    (appClaimAvdName.length > 160 ||
+      appClaimAvdName.startsWith('-') ||
+      appClaimAvdName.includes('/') ||
+      appClaimAvdName.includes('\\') ||
+      appClaimAvdName.includes('\0'))
+  ) {
+    errors.appClaimAvdName = 'Enter a valid Android emulator AVD name.';
+  }
+
   const fieldOrder: readonly SiteEditorField[] = [
     'name',
     'bonus',
     'maxCopiesPerDay',
+    'payoutThreshold',
     'url',
     'prefix',
     'suffix',
     'dateFormat',
+    'notes',
+    'appClaimDownloadUrl',
+    'appClaimApkPath',
+    'appClaimPackageName',
+    'appClaimDeepLinkUrl',
+    'appClaimAvdName',
   ];
   const firstInvalidField = fieldOrder.find((field) => errors[field]) ?? null;
 
@@ -156,6 +255,50 @@ export function validateSiteDraft(draft: SiteEditorDraft, id: string | null): Si
       dateFormat: draft.dateFormat,
       bonusCents: Math.round(bonus * 100),
       maxCopiesPerDay,
+      notes: notes.trim(),
+      payoutThresholdCents: Math.round(payoutThreshold * 100),
+      appClaim: {
+        enabled: draft.appClaimEnabled ?? false,
+        downloadUrl: appClaimDownloadUrl,
+        apkPath: appClaimApkPath || null,
+        packageName: appClaimPackageName,
+        deepLinkUrl: appClaimDeepLinkUrl,
+        avdName: appClaimAvdName,
+      },
     },
   };
+}
+
+function validateCredentialFreeUrl(
+  value: string,
+  field: SiteEditorField,
+  errors: Partial<Record<SiteEditorField, string>>,
+): void {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
+      errors[field] = 'Use a credential-free HTTPS URL.';
+    }
+  } catch {
+    errors[field] = 'Enter a valid HTTPS URL.';
+  }
+}
+
+function validateAppClaimLink(
+  value: string,
+  field: SiteEditorField,
+  errors: Partial<Record<SiteEditorField, string>>,
+): void {
+  try {
+    const parsed = new URL(value);
+    if (
+      !['https:', 'http:', 'intent:'].includes(parsed.protocol) ||
+      parsed.username ||
+      parsed.password
+    ) {
+      errors[field] = 'Enter a valid app or web link.';
+    }
+  } catch {
+    errors[field] = 'Enter a valid app or web link.';
+  }
 }

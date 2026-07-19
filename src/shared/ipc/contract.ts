@@ -42,6 +42,41 @@ export interface SiteUpsertRequest {
   dateFormat: string;
   bonusCents: number;
   maxCopiesPerDay: number;
+  notes: string;
+  payoutThresholdCents: number;
+  appClaim: {
+    enabled: boolean;
+    downloadUrl: string;
+    apkPath: string | null;
+    packageName: string;
+    deepLinkUrl: string;
+    avdName: string;
+  };
+}
+
+export interface SelectApkResponse {
+  selected: boolean;
+  filePath: string | null;
+}
+
+export interface InstallApkRequest {
+  apkPath: string;
+  avdName?: string | null;
+}
+
+export interface InstallApkResponse {
+  installed: true;
+  packageName: string | null;
+}
+
+export interface LaunchAndroidPackageRequest {
+  packageName: string;
+  avdName?: string | null;
+}
+
+export interface OpenAndroidDeepLinkRequest {
+  url: string;
+  avdName?: string | null;
 }
 
 export interface SiteUpsertResponse extends SnapshotResponse {
@@ -53,10 +88,49 @@ export interface SiteDeleteRequest {
   occurredAt: string;
 }
 
+export interface SiteLifecycleRequest {
+  siteId: string;
+  lifecycle: 'active' | 'archived' | 'trashed';
+  occurredAt: string;
+}
+
+export interface PayoutUpsertRequest {
+  id: string | null;
+  siteId: string;
+  amountCents: number;
+  expectedDate: string;
+  paidAt: string | null;
+  occurredAt: string;
+  note: string;
+}
+
+export interface PayoutUpsertResponse extends SnapshotResponse {
+  payoutId: string;
+}
+
+export interface PayoutDeleteRequest {
+  payoutId: string;
+}
+
 export interface CopyLinkRequest {
   siteId: string;
   text: string;
   occurredAt: string;
+  imagePath?: string | null | undefined;
+}
+
+export interface CopyTextRequest {
+  text: string;
+  imagePath?: string | null | undefined;
+}
+
+export interface SelectShareImageResponse {
+  selected: boolean;
+  filePath: string | null;
+}
+
+export interface ShareQueueAdvanceTriggeredEvent {
+  accelerator: string;
 }
 
 export type ImageCleanupStart =
@@ -108,6 +182,26 @@ export interface SetImageCleanerEnabledRequest {
   enabled: boolean;
 }
 
+export interface SetImageCompressorEnabledRequest {
+  enabled: boolean;
+}
+
+export interface FacebookGroupShareUpsertRequest {
+  id: string | null;
+  label: string;
+  groupUrl: string;
+  currentPostUrl: string | null;
+  useMostRecentPost: boolean;
+}
+
+export interface FacebookGroupShareUpsertResponse extends SnapshotResponse {
+  groupId: string;
+}
+
+export interface FacebookGroupShareDeleteRequest {
+  groupId: string;
+}
+
 export interface SetImageCleanerHotkeyRequest {
   hotkey: string | null;
 }
@@ -132,6 +226,11 @@ export interface HotkeyTriggeredEvent {
 }
 
 export interface SelectImageCleanerFolderResponse extends SnapshotResponse {
+  selected: boolean;
+  folderPath: string | null;
+}
+
+export interface SelectImageCompressorFolderResponse extends SnapshotResponse {
   selected: boolean;
   folderPath: string | null;
 }
@@ -332,15 +431,31 @@ export interface RefTrackApi {
   };
   sites: {
     upsert(request: SiteUpsertRequest): Promise<IpcResult<SiteUpsertResponse>>;
+    setLifecycle(request: SiteLifecycleRequest): Promise<IpcResult<SnapshotResponse>>;
     delete(request: SiteDeleteRequest): Promise<IpcResult<SnapshotResponse>>;
+    selectApk(): Promise<IpcResult<SelectApkResponse>>;
+    installApk(request: InstallApkRequest): Promise<IpcResult<InstallApkResponse>>;
+    launchAndroidPackage(
+      request: LaunchAndroidPackageRequest,
+    ): Promise<IpcResult<{ launched: true }>>;
+    openAndroidDeepLink(request: OpenAndroidDeepLinkRequest): Promise<IpcResult<{ opened: true }>>;
   };
   activity: {
     clear(): Promise<IpcResult<SnapshotResponse>>;
   };
+  payouts: {
+    upsert(request: PayoutUpsertRequest): Promise<IpcResult<PayoutUpsertResponse>>;
+    delete(request: PayoutDeleteRequest): Promise<IpcResult<SnapshotResponse>>;
+  };
   actions: {
     copyLink(request: CopyLinkRequest): Promise<IpcResult<CopyLinkResponse>>;
+    copyText(request: CopyTextRequest): Promise<IpcResult<{ copied: true }>>;
+    selectShareImage(): Promise<IpcResult<SelectShareImageResponse>>;
     recordSuccess(request: RecordSuccessRequest): Promise<IpcResult<RecordSuccessResponse>>;
     undoSuccess(request: UndoSuccessRequest): Promise<IpcResult<SnapshotResponse>>;
+  };
+  shareQueue: {
+    onAdvanceHotkey(listener: (event: ShareQueueAdvanceTriggeredEvent) => void): () => void;
   };
   settings: {
     setImageCleanerEnabled(
@@ -349,6 +464,16 @@ export interface RefTrackApi {
     selectImageCleanerFolder(): Promise<IpcResult<SelectImageCleanerFolderResponse>>;
     setImageCleanerHotkey(
       request: SetImageCleanerHotkeyRequest,
+    ): Promise<IpcResult<SnapshotResponse>>;
+    setImageCompressorEnabled(
+      request: SetImageCompressorEnabledRequest,
+    ): Promise<IpcResult<SnapshotResponse>>;
+    selectImageCompressorFolder(): Promise<IpcResult<SelectImageCompressorFolderResponse>>;
+    upsertFacebookGroupShare(
+      request: FacebookGroupShareUpsertRequest,
+    ): Promise<IpcResult<FacebookGroupShareUpsertResponse>>;
+    deleteFacebookGroupShare(
+      request: FacebookGroupShareDeleteRequest,
     ): Promise<IpcResult<SnapshotResponse>>;
     setCheckinSchedule(request: SetCheckinScheduleRequest): Promise<IpcResult<SnapshotResponse>>;
     setHotkeys(request: SetHotkeysRequest): Promise<IpcResult<SnapshotResponse>>;

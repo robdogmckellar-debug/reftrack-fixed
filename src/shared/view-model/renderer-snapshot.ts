@@ -10,6 +10,28 @@ export interface RendererSite {
   copies: number;
   successes: number;
   earnings: number;
+  notes?: string;
+  lifecycle?: 'active' | 'archived' | 'trashed';
+  lifecycleChangedAt?: string | null;
+  payoutThreshold?: number;
+  appClaim?: {
+    enabled: boolean;
+    downloadUrl: string;
+    apkPath: string | null;
+    packageName: string;
+    deepLinkUrl: string;
+    avdName: string;
+  };
+}
+
+export interface RendererPayoutEntry {
+  id: string;
+  siteId: string;
+  amount: number;
+  expectedDate: string;
+  paidAt: string | null;
+  createdAt: string;
+  note: string;
 }
 
 export interface RendererDailyMetrics {
@@ -41,11 +63,23 @@ export interface RendererHotkeySettings {
   bindings: RendererHotkeyBinding[];
 }
 
+export interface RendererFacebookGroupShare {
+  id: string;
+  label: string;
+  groupUrl: string;
+  currentPostUrl: string | null;
+  useMostRecentPost: boolean;
+}
+
 export interface RendererSettings {
   darkMode: boolean;
   folderClearEnabled: boolean;
   folderClearPath: string | null;
   folderClearHotkey?: string | null;
+  imageCompressorEnabled?: boolean;
+  imageCompressorPath?: string | null;
+  imageCompressorQuality?: number;
+  facebookGroupShares?: RendererFacebookGroupShare[];
   checkinSchedule: {
     enabled: boolean;
     time: string;
@@ -107,4 +141,5 @@ export interface RendererSnapshot {
   };
   tasksDailyState: RendererTaskDailyState;
   checkinDailyState: RendererCheckinDailyState;
+  payouts?: RendererPayoutEntry[];
 }

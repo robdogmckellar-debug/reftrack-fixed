@@ -3,6 +3,7 @@ import type { JSX } from 'preact';
 import { CheckIcon, ClipboardIcon, ExternalLinkIcon, SuccessIcon } from '../../../components/icons';
 import { Button } from '../../../design-system/Button';
 import { formatCurrency } from '../../../lib/format';
+import type { RendererSite } from '../../../../shared/view-model/renderer-snapshot';
 import {
   dailySignalFor,
   pendingCopySiteIds,
@@ -17,7 +18,7 @@ interface SiteCardProps {
   selected: boolean;
   onCopy(siteId: string): void;
   onSuccess(siteId: string): void;
-  onOpen(url: string): void;
+  onOpen(site: RendererSite): void;
   onToggleSelected(siteId: string, selected: boolean): void;
 }
 
@@ -43,6 +44,8 @@ export function SiteCard({
   const streak = siteStreakFor(siteId);
   const inProgress = !complete && today.copies > 0;
   const missingUrl = !site.url;
+  const opensApp = Boolean(site.appClaim?.enabled);
+  const canOpenDestination = Boolean(site.url || opensApp);
   const status = missingUrl
     ? 'Referral URL required'
     : complete
@@ -68,13 +71,17 @@ export function SiteCard({
     >
       <header class="dashboard-site-card__header">
         <div class="dashboard-site-card__identity">
-          {site.url ? (
+          {canOpenDestination ? (
             <button
               id={`dashboard-site-${site.id}`}
               type="button"
               class="dashboard-site-card__name dashboard-site-card__name--link"
-              title={`Open ${site.name} in your default browser`}
-              onClick={() => onOpen(site.url)}
+              title={
+                opensApp
+                  ? `Launch ${site.name} in your Android emulator`
+                  : `Open ${site.name} in your default browser`
+              }
+              onClick={() => onOpen(site)}
             >
               <span>{site.name}</span>
               <ExternalLinkIcon size={14} />

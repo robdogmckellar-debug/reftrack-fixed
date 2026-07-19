@@ -34,6 +34,22 @@ describe('copy action orchestration', () => {
     expect(response.cleanup).toEqual({ status: 'started', jobId: 'cleanup-1' });
   });
 
+  it('passes post text along with an attached share image', async () => {
+    const writeClipboard = vi.fn();
+    const service = new CopyActionService({
+      commands: {
+        assertCopyAllowed: vi.fn(),
+        recordCopy: vi.fn(async () => ({ snapshot: snapshotWithCleaner(false, null) })),
+      },
+      cleanupCoordinator: { start: vi.fn(() => ({ status: 'disabled', jobId: null })) },
+      writeClipboard,
+    });
+
+    await service.copy({ ...request, imagePath: 'C:\\Shares\\post.png' });
+
+    expect(writeClipboard).toHaveBeenCalledWith(request.text, 'C:\\Shares\\post.png');
+  });
+
   it('does not start cleanup when disabled or when no folder is configured', async () => {
     const start = vi.fn();
     const disabled = new CopyActionService({

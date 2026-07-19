@@ -68,6 +68,49 @@
   margin-top: 2px;
 }
 
+.site-editor-lifecycle-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-2);
+  background: var(--color-surface-2);
+}
+
+.site-editor-lifecycle-tabs button {
+  display: flex;
+  min-width: 0;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--font-size-1);
+  cursor: pointer;
+}
+
+.site-editor-lifecycle-tabs button:hover {
+  color: var(--color-text);
+  background: var(--color-surface-3);
+}
+
+.site-editor-lifecycle-tabs button.is-selected {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-1);
+  color: var(--color-text);
+}
+
+.site-editor-lifecycle-tabs strong {
+  min-width: 18px;
+  text-align: center;
+  font-size: 0.6875rem;
+}
+
 .site-editor-new-indicator {
   display: flex;
   min-height: 42px;
@@ -415,7 +458,8 @@
 }
 
 .site-editor-field input,
-.site-editor-field select {
+.site-editor-field select,
+.site-editor-field textarea {
   width: 100%;
   min-width: 0;
   min-height: 38px;
@@ -438,25 +482,35 @@
 }
 
 .site-editor-field input:hover,
-.site-editor-field select:hover {
+.site-editor-field select:hover,
+.site-editor-field textarea:hover {
   border-color: #526378;
 }
 
 .site-editor-field input:focus,
-.site-editor-field select:focus {
+.site-editor-field select:focus,
+.site-editor-field textarea:focus {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(75, 213, 237, 0.12);
   background: #101923;
 }
 
 .site-editor-field input[aria-invalid='true'],
-.site-editor-field select[aria-invalid='true'] {
+.site-editor-field select[aria-invalid='true'],
+.site-editor-field textarea[aria-invalid='true'] {
   border-color: var(--color-danger);
 }
 
-.site-editor-field input::placeholder {
+.site-editor-field input::placeholder,
+.site-editor-field textarea::placeholder {
   color: var(--color-text-muted);
   opacity: 0.76;
+}
+
+.site-editor-field textarea {
+  min-height: 112px;
+  resize: vertical;
+  line-height: 1.5;
 }
 
 .site-editor-field-help,

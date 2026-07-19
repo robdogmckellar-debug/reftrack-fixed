@@ -45,6 +45,18 @@ export function BulkCategoryDialog({
         .join(', '),
     [sites],
   );
+  const selectedSiteIds = useMemo(() => new Set(sites.map((site) => site.id)), [sites]);
+  const existingCountsByCategoryId = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const category of categories) {
+      let count = 0;
+      for (const site of category.sites) {
+        if (selectedSiteIds.has(site.id)) count += 1;
+      }
+      counts.set(category.id, count);
+    }
+    return counts;
+  }, [categories, selectedSiteIds]);
 
   const toggleCategory = (categoryId: string, selected: boolean): void => {
     setSelectedCategoryIds((current) => {
@@ -90,9 +102,7 @@ export function BulkCategoryDialog({
           {categories.length ? (
             <div class="bulk-category-dialog__list">
               {categories.map((category) => {
-                const existingCount = sites.filter((site) =>
-                  category.sites.some((candidate) => candidate.id === site.id),
-                ).length;
+                const existingCount = existingCountsByCategoryId.get(category.id) ?? 0;
                 return (
                   <label key={category.id}>
                     <input

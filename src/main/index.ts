@@ -81,6 +81,7 @@ async function startApplication(): Promise<void> {
   ipcRegistration.startBackgroundServices();
 
   hotkeyService.sync(stateService.getSnapshot());
+  hotkeyService.registerShareQueueAdvanceHotkey();
 }
 
 if (!acquireSingleInstanceLock(app, () => mainWindow)) {

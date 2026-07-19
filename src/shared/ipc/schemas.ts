@@ -9,6 +9,7 @@ const EntityIdSchema = z.string().trim().min(1).max(160);
 const IsoDateSchema = z.string().refine(isValidIsoDate, 'Expected a valid yyyy-mm-dd date');
 const IsoTimestampSchema = z.string().datetime({ offset: true });
 const SafeCountSchema = z.number().int().nonnegative().safe();
+const OptionalAvdNameSchema = z.string().trim().min(1).max(160).nullable().optional();
 const OptionalCredentialFreeHttpsUrlSchema = z
   .string()
   .trim()
@@ -25,6 +26,26 @@ export const SiteUpsertRequestSchema = z
     dateFormat: z.string().max(100),
     bonusCents: SafeCountSchema,
     maxCopiesPerDay: SafeCountSchema.max(1000),
+    notes: z.string().max(4000).default(''),
+    payoutThresholdCents: SafeCountSchema.default(0),
+    appClaim: z
+      .object({
+        enabled: z.boolean(),
+        downloadUrl: z.string().trim().max(2048),
+        apkPath: z.string().trim().min(1).max(32767).nullable(),
+        packageName: z.string().trim().max(255),
+        deepLinkUrl: z.string().trim().max(2048),
+        avdName: z.string().trim().max(160),
+      })
+      .strict()
+      .default({
+        enabled: false,
+        downloadUrl: '',
+        apkPath: null,
+        packageName: '',
+        deepLinkUrl: '',
+        avdName: '',
+      }),
   })
   .strict();
 
@@ -35,11 +56,69 @@ export const SiteDeleteRequestSchema = z
   })
   .strict();
 
+export const SiteLifecycleRequestSchema = z
+  .object({
+    siteId: EntityIdSchema,
+    lifecycle: z.enum(['active', 'archived', 'trashed']),
+    occurredAt: IsoTimestampSchema,
+  })
+  .strict();
+
+export const InstallApkRequestSchema = z
+  .object({
+    apkPath: z.string().trim().min(1).max(32767),
+    avdName: OptionalAvdNameSchema,
+  })
+  .strict();
+
+export const LaunchAndroidPackageRequestSchema = z
+  .object({
+    packageName: z
+      .string()
+      .trim()
+      .regex(
+        /^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/,
+        'Expected an Android package name',
+      )
+      .max(255),
+    avdName: OptionalAvdNameSchema,
+  })
+  .strict();
+
+export const OpenAndroidDeepLinkRequestSchema = z
+  .object({
+    url: z.string().trim().min(1).max(2048),
+    avdName: OptionalAvdNameSchema,
+  })
+  .strict();
+
+export const PayoutUpsertRequestSchema = z
+  .object({
+    id: EntityIdSchema.nullable(),
+    siteId: EntityIdSchema,
+    amountCents: SafeCountSchema.positive(),
+    expectedDate: IsoDateSchema,
+    paidAt: IsoTimestampSchema.nullable(),
+    occurredAt: IsoTimestampSchema,
+    note: z.string().max(1000),
+  })
+  .strict();
+
+export const PayoutDeleteRequestSchema = z.object({ payoutId: EntityIdSchema }).strict();
+
 export const CopyLinkRequestSchema = z
   .object({
     siteId: EntityIdSchema,
     text: z.string().min(1).max(8192),
     occurredAt: IsoTimestampSchema,
+    imagePath: z.string().trim().min(1).max(4096).nullable().optional(),
+  })
+  .strict();
+
+export const CopyTextRequestSchema = z
+  .object({
+    text: z.string().min(1).max(8192),
+    imagePath: z.string().trim().min(1).max(4096).nullable().optional(),
   })
   .strict();
 
@@ -57,6 +136,20 @@ export const UndoSuccessRequestSchema = z
   .strict();
 
 export const SetImageCleanerEnabledRequestSchema = z.object({ enabled: z.boolean() }).strict();
+
+export const SetImageCompressorEnabledRequestSchema = z.object({ enabled: z.boolean() }).strict();
+
+export const FacebookGroupShareUpsertRequestSchema = z
+  .object({
+    id: EntityIdSchema.nullable(),
+    label: z.string().trim().min(1).max(120),
+    groupUrl: z.string().trim().min(1).max(2048),
+    currentPostUrl: z.string().trim().min(1).max(2048).nullable(),
+    useMostRecentPost: z.boolean(),
+  })
+  .strict();
+
+export const FacebookGroupShareDeleteRequestSchema = z.object({ groupId: EntityIdSchema }).strict();
 
 export const SetImageCleanerHotkeyRequestSchema = z
   .object({ hotkey: z.string().trim().min(1).max(120).nullable() })

@@ -57,10 +57,14 @@ export function resolveHotkeyBindings(
 ): Map<string, string> {
   const resolved = new Map<string, string>();
   const usedKeys = new Set<string>();
+  const orderedSiteIdSet = new Set(orderedSiteIds);
+  const explicitSiteIds = new Set<string>();
+  let nextDefaultKeyIndex = 0;
 
   const customBySite = new Map<string, string>();
   for (const binding of settings.bindings) {
-    if (!orderedSiteIds.includes(binding.siteId)) continue;
+    if (!orderedSiteIdSet.has(binding.siteId)) continue;
+    explicitSiteIds.add(binding.siteId);
     if (!isValidHotkeyKey(binding.key)) continue;
     if (usedKeys.has(binding.key)) continue;
     if (customBySite.has(binding.siteId)) continue;
@@ -75,12 +79,19 @@ export function resolveHotkeyBindings(
       continue;
     }
 
-    const explicit = settings.bindings.find((binding) => binding.siteId === siteId);
     // A site with an explicit (but cleared/invalid) binding stays unbound so
     // users can intentionally remove a hotkey without it being reassigned.
-    if (explicit) continue;
+    if (explicitSiteIds.has(siteId)) continue;
 
-    const nextKey = DEFAULT_HOTKEY_SEQUENCE.find((key) => !usedKeys.has(key));
+    let nextKey: string | undefined;
+    while (nextDefaultKeyIndex < DEFAULT_HOTKEY_SEQUENCE.length) {
+      const candidate = DEFAULT_HOTKEY_SEQUENCE[nextDefaultKeyIndex];
+      nextDefaultKeyIndex += 1;
+      if (candidate && !usedKeys.has(candidate)) {
+        nextKey = candidate;
+        break;
+      }
+    }
     if (!nextKey) continue;
     resolved.set(siteId, nextKey);
     usedKeys.add(nextKey);

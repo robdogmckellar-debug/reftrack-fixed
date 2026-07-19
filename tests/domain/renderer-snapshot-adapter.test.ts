@@ -67,6 +67,63 @@ describe('renderer snapshot adapter', () => {
     });
   });
 
+  it('maps image compressor settings into the renderer snapshot', () => {
+    const state = createDefaultAppState();
+    state.settings.imageCompressor = {
+      enabled: true,
+      folderPath: 'C:\\Users\\Test\\Pictures\\Compressor',
+      quality: 64,
+    };
+
+    expect(toRendererSnapshot(state).settings).toMatchObject({
+      imageCompressorEnabled: true,
+      imageCompressorPath: 'C:\\Users\\Test\\Pictures\\Compressor',
+      imageCompressorQuality: 64,
+    });
+  });
+
+  it('maps saved Facebook groups into renderer settings', () => {
+    const state = createDefaultAppState();
+    state.settings.facebookGroupShares.groups.push({
+      id: 'facebook-group-a',
+      label: 'VIP Group',
+      groupUrl: 'https://www.facebook.com/groups/vip/',
+      currentPostUrl: 'https://www.facebook.com/groups/vip/posts/123',
+      useMostRecentPost: true,
+    });
+
+    expect(toRendererSnapshot(state).settings.facebookGroupShares).toEqual([
+      {
+        id: 'facebook-group-a',
+        label: 'VIP Group',
+        groupUrl: 'https://www.facebook.com/groups/vip/',
+        currentPostUrl: 'https://www.facebook.com/groups/vip/posts/123',
+        useMostRecentPost: true,
+      },
+    ]);
+  });
+
+  it('maps per-site app claim settings into renderer sites', () => {
+    const state = createDefaultAppState();
+    state.sites[0]!.appClaim = {
+      enabled: true,
+      downloadUrl: 'https://alpha.example/app',
+      apkPath: 'C:\\Apps\\alpha.apk',
+      packageName: 'com.alpha.claim',
+      deepLinkUrl: 'https://alpha.example/claim',
+      avdName: 'Pixel_8_API_35',
+    };
+
+    expect(toRendererSnapshot(state).sites[0]?.appClaim).toEqual({
+      enabled: true,
+      downloadUrl: 'https://alpha.example/app',
+      apkPath: 'C:\\Apps\\alpha.apk',
+      packageName: 'com.alpha.claim',
+      deepLinkUrl: 'https://alpha.example/claim',
+      avdName: 'Pixel_8_API_35',
+    });
+  });
+
   it('deep-clones task collections so canonical state is not shared with the snapshot', () => {
     const state = createDefaultAppState();
     state.taskCategories = [{ id: 'category-a', name: 'Category A', colour: 'teal', sites: [] }];

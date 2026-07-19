@@ -21,6 +21,28 @@ const SiteSchema = z
     dateFormat: z.string().max(100),
     bonusCents: NonNegativeSafeIntegerSchema,
     maxCopiesPerDay: NonNegativeSafeIntegerSchema.max(1000),
+    notes: z.string().max(4000).default(''),
+    lifecycle: z.enum(['active', 'archived', 'trashed']).default('active'),
+    lifecycleChangedAt: IsoTimestampSchema.nullable().default(null),
+    payoutThresholdCents: NonNegativeSafeIntegerSchema.default(0),
+    appClaim: z
+      .object({
+        enabled: z.boolean().default(false),
+        downloadUrl: z.string().max(2048).default(''),
+        apkPath: z.string().max(32767).nullable().default(null),
+        packageName: z.string().max(255).default(''),
+        deepLinkUrl: z.string().max(2048).default(''),
+        avdName: z.string().max(160).default(''),
+      })
+      .strict()
+      .default({
+        enabled: false,
+        downloadUrl: '',
+        apkPath: null,
+        packageName: '',
+        deepLinkUrl: '',
+        avdName: '',
+      }),
   })
   .strict();
 
@@ -40,6 +62,28 @@ const ActivityEntrySchema = z
     siteId: EntityIdSchema.nullable(),
     siteName: z.string().trim().min(1).max(100),
     amountCents: NonNegativeSafeIntegerSchema.nullable(),
+  })
+  .strict();
+
+const PayoutEntrySchema = z
+  .object({
+    id: EntityIdSchema,
+    siteId: EntityIdSchema,
+    amountCents: NonNegativeSafeIntegerSchema.positive(),
+    expectedDate: IsoDateSchema,
+    paidAt: IsoTimestampSchema.nullable(),
+    createdAt: IsoTimestampSchema,
+    note: z.string().max(1000),
+  })
+  .strict();
+
+const FacebookGroupShareSchema = z
+  .object({
+    id: EntityIdSchema,
+    label: z.string().trim().min(1).max(120),
+    groupUrl: z.string().trim().min(1).max(2048),
+    currentPostUrl: z.string().trim().min(1).max(2048).nullable(),
+    useMostRecentPost: z.boolean().default(false),
   })
   .strict();
 
@@ -131,6 +175,20 @@ export const AppStateV1Schema = z
             hotkey: z.string().max(120).nullable().default(null),
           })
           .strict(),
+        imageCompressor: z
+          .object({
+            enabled: z.boolean(),
+            folderPath: z.string().max(32767).nullable(),
+            quality: z.number().int().min(1).max(100).default(70),
+          })
+          .strict()
+          .default({ enabled: false, folderPath: null, quality: 70 }),
+        facebookGroupShares: z
+          .object({
+            groups: z.array(FacebookGroupShareSchema).max(1000),
+          })
+          .strict()
+          .default({ groups: [] }),
         checkin: CheckinSettingsSchema.default({ ...DEFAULT_CHECKIN_SETTINGS }),
         hotkeys: z
           .object({
@@ -163,6 +221,7 @@ export const AppStateV1Schema = z
     checkinDailyRecords: z
       .record(IsoDateSchema, z.record(EntityIdSchema, CheckinResultRecordSchema))
       .default({}),
+    payouts: z.array(PayoutEntrySchema).max(10000).default([]),
   })
   .strict()
   .superRefine((state, context) => {
@@ -176,6 +235,37 @@ export const AppStateV1Schema = z
         });
       }
       siteIds.add(site.id);
+    });
+
+    const payoutIds = new Set<string>();
+    state.payouts.forEach((payout, index) => {
+      if (payoutIds.has(payout.id)) {
+        context.addIssue({
+          code: 'custom',
+          message: `Duplicate payout ID: ${payout.id}`,
+          path: ['payouts', index, 'id'],
+        });
+      }
+      if (!siteIds.has(payout.siteId)) {
+        context.addIssue({
+          code: 'custom',
+          message: `Unknown payout site ID: ${payout.siteId}`,
+          path: ['payouts', index, 'siteId'],
+        });
+      }
+      payoutIds.add(payout.id);
+    });
+
+    const facebookGroupIds = new Set<string>();
+    state.settings.facebookGroupShares.groups.forEach((group, index) => {
+      if (facebookGroupIds.has(group.id)) {
+        context.addIssue({
+          code: 'custom',
+          message: `Duplicate Facebook group ID: ${group.id}`,
+          path: ['settings', 'facebookGroupShares', 'groups', index, 'id'],
+        });
+      }
+      facebookGroupIds.add(group.id);
     });
 
     const categoryIds = new Set<string>();

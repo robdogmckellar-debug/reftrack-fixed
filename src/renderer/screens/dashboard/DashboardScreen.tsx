@@ -1,11 +1,14 @@
 import type { JSX } from 'preact';
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import type { ImageCleanupCompletedEvent } from '../../../shared/ipc/contract';
-import { navigateTo, publishSnapshot } from '../../app/store';
-import { LinkIcon } from '../../components/icons';
+import { navigateTo, publishSnapshot, rendererSnapshot } from '../../app/store';
+import { BulkCategoryDialog } from '../../components/BulkCategoryDialog';
+import { ClipboardIcon, ExternalLinkIcon, LinkIcon, TasksIcon } from '../../components/icons';
 import { Button } from '../../design-system/Button';
 import { errorMessage, unwrapIpcResult } from '../../lib/ipc-result';
+import { newCategoryDetails, taskSiteFromReferralSite } from '../../lib/task-membership';
+import { queueReferralSites } from '../share-queue/share-queue-store';
 import {
   activityClearPending,
   dashboardFilter,
@@ -62,13 +65,39 @@ function nextToastId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `toast-${Date.now()}-${Math.random()}`;
 }
 
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
 export function DashboardScreen({ active }: { active: boolean }): JSX.Element {
+  const snapshot = rendererSnapshot.value;
   const [toasts, setToasts] = useState<readonly DashboardToast[]>([]);
   const [undo, setUndo] = useState<DashboardUndo | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedSiteIds, setSelectedSiteIds] = useState<ReadonlySet<string>>(new Set());
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [bulkPending, setBulkPending] = useState<'open' | 'category' | 'share' | null>(null);
   const toastTimers = useRef(new Map<string, number>());
   const undoTimer = useRef<number | null>(null);
   const siteIds = visibleDashboardSiteIds.value;
   const selectedFilter = dashboardFilter.value;
+  const categories = snapshot?.tasks.categories ?? [];
+  const selectedReferralSites = useMemo(
+    () => (snapshot?.sites ?? []).filter((site) => selectedSiteIds.has(site.id)),
+    [selectedSiteIds, snapshot?.sites],
+  );
+  const selectedCategorySites = useMemo(
+    () => selectedReferralSites.map((site) => taskSiteFromReferralSite(site, categories)),
+    [categories, selectedReferralSites],
+  );
+
+  useEffect(() => {
+    const validIds = new Set((snapshot?.sites ?? []).map((site) => site.id));
+    setSelectedSiteIds((current) => {
+      const next = new Set([...current].filter((siteId) => validIds.has(siteId)));
+      return next.size === current.size ? current : next;
+    });
+  }, [snapshot?.sites]);
 
   const dismissToast = useCallback((id: string): void => {
     const timer = toastTimers.current.get(id);
@@ -233,15 +262,150 @@ export function DashboardScreen({ active }: { active: boolean }): JSX.Element {
     }
   };
 
-  const openSite = async (url: string): Promise<void> => {
+  const openSite = async (site: (typeof selectedReferralSites)[number]): Promise<void> => {
     try {
-      unwrapIpcResult(await window.reftrack.external.open({ url }));
+      if (site.appClaim?.enabled) {
+        if (site.appClaim.packageName.trim()) {
+          unwrapIpcResult(
+            await window.reftrack.sites.launchAndroidPackage({
+              packageName: site.appClaim.packageName.trim(),
+              avdName: site.appClaim.avdName.trim() || null,
+            }),
+          );
+          addToast('success', `${site.name} app launched`);
+          return;
+        }
+        if (site.appClaim.deepLinkUrl.trim()) {
+          unwrapIpcResult(
+            await window.reftrack.sites.openAndroidDeepLink({
+              url: site.appClaim.deepLinkUrl.trim(),
+              avdName: site.appClaim.avdName.trim() || null,
+            }),
+          );
+          addToast('success', `${site.name} claim link opened in emulator`);
+          return;
+        }
+        addToast(
+          'info',
+          `${site.name} needs app claim setup`,
+          'Add an Android package name or claim link in Site Editor.',
+        );
+        return;
+      }
+
+      unwrapIpcResult(await window.reftrack.external.open({ url: site.url }));
     } catch (error) {
       addToast(
         'danger',
-        'Could not open site',
-        errorMessage(error, 'Windows could not open that URL.'),
+        site.appClaim?.enabled ? 'Could not launch app' : 'Could not open site',
+        errorMessage(
+          error,
+          site.appClaim?.enabled
+            ? 'RefTrack could not launch that Android app.'
+            : 'Windows could not open that URL.',
+        ),
       );
+    }
+  };
+
+  const toggleSelectedSite = (siteId: string, selected: boolean): void => {
+    setSelectedSiteIds((current) => {
+      const next = new Set(current);
+      if (selected) next.add(siteId);
+      else next.delete(siteId);
+      return next;
+    });
+  };
+
+  const finishSelection = (): void => {
+    setSelectionMode(false);
+    setSelectedSiteIds(new Set());
+  };
+
+  const openSelectedSites = async (): Promise<void> => {
+    if (bulkPending || selectedReferralSites.length === 0) return;
+    const openable = selectedReferralSites.filter((site) => site.url);
+    if (openable.length === 0) {
+      addToast('info', 'No selected sites have URLs');
+      return;
+    }
+
+    setBulkPending('open');
+    let opened = 0;
+    try {
+      for (const site of openable) {
+        try {
+          unwrapIpcResult(await window.reftrack.external.open({ url: site.url }));
+          opened += 1;
+        } catch {
+          // Report the aggregate after every selected URL has been attempted.
+        }
+        if (site !== openable[openable.length - 1]) await delay(180);
+      }
+
+      addToast(
+        opened === openable.length ? 'success' : 'danger',
+        `Opened ${opened} of ${openable.length} selected site${openable.length === 1 ? '' : 's'}`,
+        opened === openable.length ? undefined : 'Some URLs could not be opened by Windows.',
+      );
+    } finally {
+      setBulkPending(null);
+    }
+  };
+
+  const queueSelectedShares = (): void => {
+    if (bulkPending || selectedReferralSites.length === 0) return;
+    setBulkPending('share');
+    const queued = queueReferralSites(selectedReferralSites);
+    setBulkPending(null);
+    if (queued === 0) {
+      addToast(
+        'info',
+        'No new sites queued',
+        'Selected sites may already be queued or missing URLs.',
+      );
+      return;
+    }
+    addToast(
+      'success',
+      `Queued ${queued} site${queued === 1 ? '' : 's'} for sharing`,
+      'Review posts in Facebook Group Shares before submitting manually.',
+    );
+    navigateTo('share');
+  };
+
+  const addSelectedToCategories = async (
+    categoryIds: string[],
+    newCategoryName: string,
+  ): Promise<void> => {
+    if (bulkPending || selectedCategorySites.length === 0) return;
+    setBulkPending('category');
+    try {
+      const response = unwrapIpcResult(
+        await window.reftrack.tasks.addSitesToCategories({
+          sites: selectedCategorySites,
+          categoryIds,
+          newCategory: newCategoryName
+            ? newCategoryDetails(newCategoryName, categories.length)
+            : null,
+        }),
+      );
+      publishSnapshot(response.snapshot);
+      setCategoryDialogOpen(false);
+      addToast(
+        'success',
+        `Added ${selectedCategorySites.length} site${selectedCategorySites.length === 1 ? '' : 's'}`,
+        `${response.categoryIds.length} categor${response.categoryIds.length === 1 ? 'y' : 'ies'} updated.`,
+      );
+      finishSelection();
+    } catch (error) {
+      addToast(
+        'danger',
+        'Sites were not added',
+        errorMessage(error, 'RefTrack could not update the selected categories.'),
+      );
+    } finally {
+      setBulkPending(null);
     }
   };
 
@@ -287,28 +451,107 @@ export function DashboardScreen({ active }: { active: boolean }): JSX.Element {
               </h1>
             </div>
 
-            <div class="dashboard-filter" role="group" aria-label="Filter active sites">
-              {(
-                [
-                  ['all', 'All'],
-                  ['pending', 'Ready'],
-                  ['done', 'Complete'],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  class={selectedFilter === id ? 'is-selected' : ''}
-                  aria-pressed={selectedFilter === id}
-                  onClick={() => {
-                    dashboardFilter.value = id;
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
+            <div class="dashboard-sites__header-actions">
+              <Button
+                size="small"
+                variant={selectionMode ? 'primary' : 'secondary'}
+                onClick={() => {
+                  if (selectionMode) finishSelection();
+                  else setSelectionMode(true);
+                }}
+              >
+                {selectionMode ? 'Done' : 'Select'}
+              </Button>
+              <div class="dashboard-filter" role="group" aria-label="Filter active sites">
+                {(
+                  [
+                    ['all', 'All'],
+                    ['pending', 'Ready'],
+                    ['done', 'Complete'],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    class={selectedFilter === id ? 'is-selected' : ''}
+                    aria-pressed={selectedFilter === id}
+                    onClick={() => {
+                      dashboardFilter.value = id;
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </header>
+
+          {selectionMode ? (
+            <div class="dashboard-bulk-actions" role="toolbar" aria-label="Selected site actions">
+              <strong>{selectedSiteIds.size} selected</strong>
+              <Button
+                size="small"
+                variant="quiet"
+                onClick={() => {
+                  const allVisibleSelected = siteIds.every((siteId) => selectedSiteIds.has(siteId));
+                  setSelectedSiteIds((current) => {
+                    const next = new Set(current);
+                    for (const siteId of siteIds) {
+                      if (allVisibleSelected) next.delete(siteId);
+                      else next.add(siteId);
+                    }
+                    return next;
+                  });
+                }}
+              >
+                {siteIds.length > 0 && siteIds.every((siteId) => selectedSiteIds.has(siteId))
+                  ? 'Deselect visible'
+                  : 'Select visible'}
+              </Button>
+              <span class="dashboard-bulk-actions__spacer" />
+              <Button
+                size="small"
+                variant="secondary"
+                pending={bulkPending === 'open'}
+                disabled={
+                  selectedSiteIds.size === 0 || (bulkPending !== null && bulkPending !== 'open')
+                }
+                leadingIcon={<ExternalLinkIcon size={15} />}
+                onClick={() => void openSelectedSites()}
+              >
+                Open sites
+              </Button>
+              <Button
+                size="small"
+                variant="secondary"
+                pending={bulkPending === 'share'}
+                disabled={
+                  selectedSiteIds.size === 0 || (bulkPending !== null && bulkPending !== 'share')
+                }
+                leadingIcon={<ClipboardIcon size={15} />}
+                onClick={queueSelectedShares}
+              >
+                Queue share
+              </Button>
+              <Button
+                size="small"
+                variant="primary"
+                disabled={selectedSiteIds.size === 0 || bulkPending !== null}
+                leadingIcon={<TasksIcon size={15} />}
+                onClick={() => setCategoryDialogOpen(true)}
+              >
+                Add to category
+              </Button>
+              <Button
+                size="small"
+                variant="quiet"
+                disabled={selectedSiteIds.size === 0 || bulkPending !== null}
+                onClick={() => setSelectedSiteIds(new Set())}
+              >
+                Clear
+              </Button>
+            </div>
+          ) : null}
 
           {siteIds.length === 0 ? (
             <div class="dashboard-sites__empty">
@@ -344,9 +587,12 @@ export function DashboardScreen({ active }: { active: boolean }): JSX.Element {
                 <SiteCard
                   key={siteId}
                   siteId={siteId}
+                  selectionMode={selectionMode}
+                  selected={selectedSiteIds.has(siteId)}
                   onCopy={(id) => void copySite(id)}
                   onSuccess={(id) => void recordSuccess(id)}
-                  onOpen={(url) => void openSite(url)}
+                  onOpen={(site) => void openSite(site)}
+                  onToggleSelected={toggleSelectedSite}
                 />
               ))}
             </div>
@@ -355,6 +601,17 @@ export function DashboardScreen({ active }: { active: boolean }): JSX.Element {
 
         <ActivityFeed onClear={() => void clearActivity()} />
       </div>
+
+      <BulkCategoryDialog
+        open={categoryDialogOpen}
+        sites={selectedCategorySites}
+        categories={categories}
+        pending={bulkPending === 'category'}
+        onClose={() => setCategoryDialogOpen(false)}
+        onApply={(categoryIds, newCategoryName) =>
+          void addSelectedToCategories(categoryIds, newCategoryName)
+        }
+      />
 
       <DashboardToastRegion toasts={toasts} onDismiss={dismissToast} />
       <DashboardUndoBar undo={undo} />

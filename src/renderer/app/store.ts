@@ -4,7 +4,15 @@ import type { StorageStatus } from '../../shared/ipc/contract';
 import type { RendererSnapshot } from '../../shared/view-model/renderer-snapshot';
 import { resetDashboardStore, synchroniseDashboard } from '../screens/dashboard/dashboard-store';
 
-export const SCREEN_IDS = ['dashboard', 'editor', 'statistics', 'settings', 'tasks'] as const;
+export const SCREEN_IDS = [
+  'dashboard',
+  'editor',
+  'share',
+  'payouts',
+  'statistics',
+  'settings',
+  'tasks',
+] as const;
 
 export type ScreenId = (typeof SCREEN_IDS)[number];
 export type BootStatus = 'idle' | 'loading' | 'ready' | 'failed';
@@ -29,8 +37,12 @@ export const activeScreenTitle = computed(() => {
       return 'Dashboard';
     case 'editor':
       return 'Site Editor';
+    case 'share':
+      return 'Facebook Group Shares';
     case 'statistics':
       return 'Statistics';
+    case 'payouts':
+      return 'Payouts';
     case 'settings':
       return 'Settings';
     case 'tasks':

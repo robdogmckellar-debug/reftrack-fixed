@@ -9,6 +9,7 @@ import type {
   ImporterCompletedEvent,
   ImporterProgressEvent,
   RefTrackApi,
+  ShareQueueAdvanceTriggeredEvent,
 } from '../shared/ipc/contract';
 
 const reftrackApi: RefTrackApi = {
@@ -18,15 +19,40 @@ const reftrackApi: RefTrackApi = {
   },
   sites: {
     upsert: (request) => ipcRenderer.invoke(IPC_CHANNELS.sitesUpsert, request),
+    setLifecycle: (request) => ipcRenderer.invoke(IPC_CHANNELS.sitesSetLifecycle, request),
     delete: (request) => ipcRenderer.invoke(IPC_CHANNELS.sitesDelete, request),
+    selectApk: () => ipcRenderer.invoke(IPC_CHANNELS.sitesSelectApk),
+    installApk: (request) => ipcRenderer.invoke(IPC_CHANNELS.sitesInstallApk, request),
+    launchAndroidPackage: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.sitesLaunchAndroidPackage, request),
+    openAndroidDeepLink: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.sitesOpenAndroidDeepLink, request),
   },
   activity: {
     clear: () => ipcRenderer.invoke(IPC_CHANNELS.activityClear),
   },
+  payouts: {
+    upsert: (request) => ipcRenderer.invoke(IPC_CHANNELS.payoutsUpsert, request),
+    delete: (request) => ipcRenderer.invoke(IPC_CHANNELS.payoutsDelete, request),
+  },
   actions: {
     copyLink: (request) => ipcRenderer.invoke(IPC_CHANNELS.actionsCopyLink, request),
+    copyText: (request) => ipcRenderer.invoke(IPC_CHANNELS.actionsCopyText, request),
+    selectShareImage: () => ipcRenderer.invoke(IPC_CHANNELS.actionsSelectShareImage),
     recordSuccess: (request) => ipcRenderer.invoke(IPC_CHANNELS.actionsRecordSuccess, request),
     undoSuccess: (request) => ipcRenderer.invoke(IPC_CHANNELS.actionsUndoSuccess, request),
+  },
+  shareQueue: {
+    onAdvanceHotkey: (listener) => {
+      const wrapped = (
+        _event: Electron.IpcRendererEvent,
+        payload: ShareQueueAdvanceTriggeredEvent,
+      ): void => {
+        listener(payload);
+      };
+      ipcRenderer.on(IPC_CHANNELS.shareQueueAdvanceTriggered, wrapped);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.shareQueueAdvanceTriggered, wrapped);
+    },
   },
   settings: {
     setImageCleanerEnabled: (request) =>
@@ -35,10 +61,20 @@ const reftrackApi: RefTrackApi = {
       ipcRenderer.invoke(IPC_CHANNELS.settingsSelectImageCleanerFolder),
     setImageCleanerHotkey: (request) =>
       ipcRenderer.invoke(IPC_CHANNELS.settingsSetImageCleanerHotkey, request),
+    setImageCompressorEnabled: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.settingsSetImageCompressorEnabled, request),
+    selectImageCompressorFolder: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.settingsSelectImageCompressorFolder),
+    upsertFacebookGroupShare: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.settingsUpsertFacebookGroupShare, request),
+    deleteFacebookGroupShare: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.settingsDeleteFacebookGroupShare, request),
+    setCheckinSchedule: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.settingsSetCheckinSchedule, request),
     setHotkeys: (request) => ipcRenderer.invoke(IPC_CHANNELS.settingsSetHotkeys, request),
   },
   window: {
-    minimize: () => ipcRenderer.invoke(IPC_CHANNELS.windowMinimize),
+    hideToTray: () => ipcRenderer.invoke(IPC_CHANNELS.windowHideToTray),
   },
   hotkeys: {
     onTriggered: (listener) => {
@@ -64,6 +100,8 @@ const reftrackApi: RefTrackApi = {
   },
   tasks: {
     upsertCategory: (request) => ipcRenderer.invoke(IPC_CHANNELS.tasksUpsertCategory, request),
+    addSitesToCategories: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tasksAddSitesToCategories, request),
     deleteCategory: (request) => ipcRenderer.invoke(IPC_CHANNELS.tasksDeleteCategory, request),
     setCompletion: (request) => ipcRenderer.invoke(IPC_CHANNELS.tasksSetCompletion, request),
     setCompletions: (request) => ipcRenderer.invoke(IPC_CHANNELS.tasksSetCompletions, request),

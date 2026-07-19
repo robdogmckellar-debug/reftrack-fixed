@@ -17,6 +17,8 @@ import { StatusMessage } from '../design-system/StatusMessage';
 import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
 import { performCopy } from '../screens/dashboard/copy-action';
 import { DailyTasksScreen } from '../screens/daily-tasks/DailyTasksScreen';
+import { PayoutsScreen } from '../screens/payouts/PayoutsScreen';
+import { ShareQueueScreen } from '../screens/share-queue/ShareQueueScreen';
 import { SiteEditorScreen } from '../screens/site-editor/SiteEditorScreen';
 import { StatisticsScreen } from '../screens/statistics/StatisticsScreen';
 import { SettingsScreen } from '../screens/settings/SettingsScreen';
@@ -82,6 +84,8 @@ export function App(): JSX.Element {
       <div class="app-workspace">
         <DashboardScreen active={screen === 'dashboard'} />
         <SiteEditorScreen active={screen === 'editor'} />
+        <ShareQueueScreen active={screen === 'share'} />
+        <PayoutsScreen active={screen === 'payouts'} />
         <StatisticsScreen active={screen === 'statistics'} />
         <SettingsScreen active={screen === 'settings'} />
         <DailyTasksScreen active={screen === 'tasks'} />

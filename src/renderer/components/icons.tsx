@@ -414,6 +414,20 @@ export function MinimizeIcon(props: IconProps): JSX.Element {
   );
 }
 
+export function MinimizeToTrayIcon(props: IconProps): JSX.Element {
+  return (
+    <IconBase {...props}>
+      <path
+        d="M12 4v9m0 0 3-3m-3 3-3-3M5 17h14"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </IconBase>
+  );
+}
+
 export function KeyboardIcon(props: IconProps): JSX.Element {
   return (
     <IconBase {...props}>

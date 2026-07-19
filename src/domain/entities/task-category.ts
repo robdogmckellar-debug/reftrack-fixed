@@ -27,6 +27,7 @@ export interface TaskSiteCheckin {
 
 export interface TaskSite {
   id: TaskSiteId;
+  sourceSiteId?: string | undefined;
   name: string;
   url: string;
   checkin?: TaskSiteCheckin | undefined;

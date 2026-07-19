@@ -71,14 +71,17 @@ export function globalTaskProgress(
   dailyState: RendererTaskDailyState,
   date: string,
 ): TaskProgress {
-  let done = 0;
-  let total = 0;
-
+  const seenSiteIds = new Set<string>();
+  const doneSiteIds = new Set<string>();
   for (const category of categories) {
-    const progress = categoryProgress(category, dailyState, date);
-    done += progress.done;
-    total += progress.total;
+    for (const site of category.sites) {
+      seenSiteIds.add(site.id);
+      if (taskSiteDone(dailyState, date, category.id, site.id)) doneSiteIds.add(site.id);
+    }
   }
+
+  const total = seenSiteIds.size;
+  const done = doneSiteIds.size;
 
   return {
     done,
@@ -174,6 +177,7 @@ export function activeTaskSites(sites: readonly RendererTaskSite[]): RendererTas
     .filter((site) => site.name.trim() || site.url.trim())
     .map((site) => ({
       id: site.id,
+      ...(site.sourceSiteId ? { sourceSiteId: site.sourceSiteId } : {}),
       name: site.name.trim(),
       url: normaliseTaskUrl(site.url),
       ...(site.checkin?.enabled ? { checkin: { enabled: true } } : {}),
@@ -193,8 +197,11 @@ export function categoryHasCheckin(category: RendererTaskCategory): boolean {
 }
 
 export function countCheckinSites(categories: readonly RendererTaskCategory[]): number {
-  return categories.reduce(
-    (total, category) => total + category.sites.filter((site) => site.checkin?.enabled).length,
-    0,
-  );
+  const siteIds = new Set<string>();
+  for (const category of categories) {
+    for (const site of category.sites) {
+      if (site.checkin?.enabled) siteIds.add(site.id);
+    }
+  }
+  return siteIds.size;
 }

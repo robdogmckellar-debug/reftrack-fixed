@@ -140,6 +140,26 @@ describe('CheckinCoordinator', () => {
     expect(completion.results[0]?.taskSiteId).toBe('beta');
   });
 
+  it('checks a shared site only once when it belongs to multiple categories', async () => {
+    const shared = checkinSite('alpha', 'Alpha');
+    const state = stateWith([shared]);
+    state.taskCategories.push({
+      id: 'cat-two',
+      name: 'Second Category',
+      colour: 'purple',
+      sites: [{ ...shared }],
+    });
+    const harness = createHarness({
+      state,
+      credentials: { alpha: { username: 'a', password: 'a' } },
+      runSiteCheckin: () => Promise.resolve({ status: 'success', message: 'ok' }),
+    });
+
+    expect(harness.coordinator.start({ taskSiteId: null }).targetCount).toBe(1);
+    expect((await harness.completion).results).toHaveLength(1);
+    expect(harness.runSiteCheckin).toHaveBeenCalledTimes(1);
+  });
+
   it('throws when no site has automatic check-in enabled', () => {
     const state = stateWith([{ id: 'delta', name: 'Delta', url: 'https://delta.example/ref' }]);
     const harness = createHarness({

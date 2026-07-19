@@ -71,6 +71,30 @@ describe('Daily Tasks model', () => {
     expect(sortTaskCategories(categories, dailyState, '2026-07-02', false)).toEqual(categories);
   });
 
+  it('counts shared sites once in global progress', () => {
+    const sharedCategories: RendererTaskCategory[] = [
+      categories[0]!,
+      {
+        id: 'cat-shared',
+        name: 'Shared',
+        colour: 'blue',
+        sites: [{ ...categories[0]!.sites[0]! }],
+      },
+    ];
+    const sharedState: RendererTaskDailyState = {
+      '2026-07-02': {
+        'cat-a': { 'site-a': true },
+        'cat-shared': { 'site-a': true },
+      },
+    };
+
+    expect(globalTaskProgress(sharedCategories, sharedState, '2026-07-02')).toEqual({
+      done: 1,
+      total: 1,
+      percent: 100,
+    });
+  });
+
   it('uses a local yyyy-mm-dd task record key', () => {
     expect(localTaskDateKey(new Date(2026, 6, 2, 23, 30))).toBe('2026-07-02');
   });

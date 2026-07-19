@@ -61,17 +61,44 @@ function createSnapshot(overrides: Partial<RendererSnapshot> = {}): RendererSnap
 
 interface ApiMocks {
   upsert: ReturnType<typeof vi.fn>;
+  setLifecycle: ReturnType<typeof vi.fn>;
   deleteSite: ReturnType<typeof vi.fn>;
   openExternal: ReturnType<typeof vi.fn>;
+  selectApk: ReturnType<typeof vi.fn>;
+  installApk: ReturnType<typeof vi.fn>;
+  launchAndroidPackage: ReturnType<typeof vi.fn>;
+  openAndroidDeepLink: ReturnType<typeof vi.fn>;
 }
 
 function installApi(): ApiMocks {
   const upsert = vi.fn();
+  const setLifecycle = vi.fn();
   const deleteSite = vi.fn();
   const openExternal = vi.fn().mockResolvedValue({ ok: true, data: { opened: true } });
+  const selectApk = vi.fn().mockResolvedValue({
+    ok: true,
+    data: { selected: true, filePath: 'C:\\Apps\\alpha.apk' },
+  });
+  const installApk = vi.fn().mockResolvedValue({
+    ok: true,
+    data: { installed: true, packageName: 'com.alpha.claim' },
+  });
+  const launchAndroidPackage = vi.fn().mockResolvedValue({
+    ok: true,
+    data: { launched: true },
+  });
+  const openAndroidDeepLink = vi.fn().mockResolvedValue({ ok: true, data: { opened: true } });
   const api = {
     bootstrap: vi.fn(),
-    sites: { upsert, delete: deleteSite },
+    sites: {
+      upsert,
+      setLifecycle,
+      delete: deleteSite,
+      selectApk,
+      installApk,
+      launchAndroidPackage,
+      openAndroidDeepLink,
+    },
     activity: { clear: vi.fn() },
     actions: { copyLink: vi.fn(), recordSuccess: vi.fn(), undoSuccess: vi.fn() },
     settings: { setImageCleanerEnabled: vi.fn(), selectImageCleanerFolder: vi.fn() },
@@ -93,7 +120,16 @@ function installApi(): ApiMocks {
   } as unknown as RefTrackApi;
 
   Object.defineProperty(window, 'reftrack', { configurable: true, value: api });
-  return { upsert, deleteSite, openExternal };
+  return {
+    upsert,
+    setLifecycle,
+    deleteSite,
+    openExternal,
+    selectApk,
+    installApk,
+    launchAndroidPackage,
+    openAndroidDeepLink,
+  };
 }
 
 beforeEach(() => {
@@ -167,6 +203,96 @@ describe('SiteEditorScreen', () => {
     expect(screen.getByText('ALPHA UPDATED saved.')).toBeTruthy();
   });
 
+  it('stores app claim fields and exposes emulator helper actions', async () => {
+    const mocks = installApi();
+    const initial = createSnapshot();
+    const saved = createSnapshot({
+      revision: 2,
+      sites: initial.sites.map((site) =>
+        site.id === 'site-alpha'
+          ? {
+              ...site,
+              appClaim: {
+                enabled: true,
+                downloadUrl: 'https://alpha.example/app',
+                apkPath: 'C:\\Apps\\alpha.apk',
+                packageName: 'com.alpha.claim',
+                deepLinkUrl: 'https://alpha.example/claim',
+                avdName: 'Pixel_8_API_35',
+              },
+            }
+          : site,
+      ),
+    });
+    mocks.upsert.mockResolvedValue({
+      ok: true,
+      data: { siteId: 'site-alpha', snapshot: saved },
+    });
+
+    publishSnapshot(initial);
+    render(<SiteEditorScreen active />);
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Requires app claim' }));
+    fireEvent.input(screen.getByLabelText('APK or app download page'), {
+      target: { value: 'https://alpha.example/app' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Choose APK' }));
+    await waitFor(() => expect(mocks.selectApk).toHaveBeenCalledTimes(1));
+    fireEvent.input(document.getElementById('site-editor-appClaimAvdName') as HTMLInputElement, {
+      target: { value: 'Pixel_8_API_35' },
+    });
+    fireEvent.input(
+      document.getElementById('site-editor-appClaimPackageName') as HTMLInputElement,
+      {
+        target: { value: 'com.alpha.claim' },
+      },
+    );
+    fireEvent.input(
+      document.getElementById('site-editor-appClaimDeepLinkUrl') as HTMLInputElement,
+      {
+        target: { value: 'https://alpha.example/claim' },
+      },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Install' }));
+    await waitFor(() =>
+      expect(mocks.installApk).toHaveBeenCalledWith({
+        apkPath: 'C:\\Apps\\alpha.apk',
+        avdName: 'Pixel_8_API_35',
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Launch app' }));
+    await waitFor(() =>
+      expect(mocks.launchAndroidPackage).toHaveBeenCalledWith({
+        packageName: 'com.alpha.claim',
+        avdName: 'Pixel_8_API_35',
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open claim link' }));
+    await waitFor(() =>
+      expect(mocks.openAndroidDeepLink).toHaveBeenCalledWith({
+        url: 'https://alpha.example/claim',
+        avdName: 'Pixel_8_API_35',
+      }),
+    );
+
+    fireEvent.submit(screen.getByRole('form', { name: 'Edit site form' }));
+    await waitFor(() =>
+      expect(mocks.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appClaim: {
+            enabled: true,
+            downloadUrl: 'https://alpha.example/app',
+            apkPath: 'C:\\Apps\\alpha.apk',
+            packageName: 'com.alpha.claim',
+            deepLinkUrl: 'https://alpha.example/claim',
+            avdName: 'Pixel_8_API_35',
+          },
+        }),
+      ),
+    );
+  });
+
   it('protects unsaved changes when selecting another site', async () => {
     publishSnapshot(createSnapshot());
     render(<SiteEditorScreen active />);
@@ -203,33 +329,37 @@ describe('SiteEditorScreen', () => {
     await waitFor(() => expect(activeScreen.value).toBe('settings'));
   });
 
-  it('deletes through an accessible confirmation and selects the next site', async () => {
+  it('moves a site to the recycle bin without deleting its statistics', async () => {
     const mocks = installApi();
     const initial = createSnapshot();
-    const afterDelete = createSnapshot({
+    const recycled = createSnapshot({
       revision: 2,
-      sites: [initial.sites[1]!],
-      lifetimeEarnings: 0,
-      lifetimeSuccesses: 0,
+      sites: initial.sites.map((site) =>
+        site.id === 'site-alpha'
+          ? { ...site, lifecycle: 'trashed' as const, lifecycleChangedAt: new Date().toISOString() }
+          : site,
+      ),
     });
-    mocks.deleteSite.mockResolvedValue({ ok: true, data: { snapshot: afterDelete } });
+    mocks.setLifecycle.mockResolvedValue({ ok: true, data: { snapshot: recycled } });
 
     publishSnapshot(initial);
     render(<SiteEditorScreen active />);
     await screen.findByDisplayValue('ALPHA');
-    fireEvent.click(screen.getByRole('button', { name: 'Delete site' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move to recycle bin' }));
 
-    const dialog = screen.getByRole('dialog', { name: 'Delete ALPHA?' });
-    expect(within(dialog).getByText(/copy history, successes, earnings/)).toBeTruthy();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete site' }));
+    const dialog = screen.getByRole('dialog', { name: 'Move ALPHA to the recycle bin?' });
+    expect(within(dialog).getByText(/history will remain intact/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Move to recycle bin' }));
 
     await waitFor(() =>
-      expect(mocks.deleteSite).toHaveBeenCalledWith({
+      expect(mocks.setLifecycle).toHaveBeenCalledWith({
         siteId: 'site-alpha',
+        lifecycle: 'trashed',
         occurredAt: expect.any(String),
       }),
     );
-    await waitFor(() => expect(screen.getByDisplayValue('BRAVO')).toBeTruthy());
-    expect(screen.getByText('ALPHA deleted with its statistics.')).toBeTruthy();
+    await waitFor(() => expect(screen.getByDisplayValue('ALPHA')).toBeTruthy());
+    expect(screen.getByText(/ALPHA moved to the recycle bin/)).toBeTruthy();
+    expect(mocks.deleteSite).not.toHaveBeenCalled();
   });
 });

@@ -6,6 +6,7 @@ import type { RendererHotkeySettings } from '../../../shared/view-model/renderer
 import { resolveHotkeyBindings } from '../../../shared/hotkeys/bindings';
 import { publishSnapshot, rendererSnapshot } from '../../app/store';
 import {
+  ActivityIcon,
   DatabaseIcon,
   FolderIcon,
   InfoIcon,
@@ -19,7 +20,13 @@ import { Button } from '../../design-system/Button';
 import { ToggleSwitch } from '../../design-system/ToggleSwitch';
 import { errorMessage, unwrapIpcResult } from '../../lib/ipc-result';
 
-type PendingAction = 'toggle-cleaner' | 'select-folder' | 'set-hotkey' | null;
+type PendingAction =
+  | 'toggle-cleaner'
+  | 'select-folder'
+  | 'set-hotkey'
+  | 'toggle-compressor'
+  | 'select-compressor-folder'
+  | null;
 type FeedbackTone = 'success' | 'info' | 'danger';
 
 interface Feedback {
@@ -29,6 +36,10 @@ interface Feedback {
 }
 
 const SUPPORTED_FORMATS = ['PNG', 'JPG', 'JPEG', 'JFIF', 'WebP', 'GIF', 'BMP', 'TIFF'] as const;
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
 
 function normalizeHotkeyKey(key: string): string | null {
   if (/^[a-z]$/i.test(key)) return key.toUpperCase();
@@ -57,10 +68,7 @@ function formatAccelerator(accelerator: string): string {
 function formatDateTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Unknown time';
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(date);
+  return DATE_TIME_FORMATTER.format(date);
 }
 
 function cleanerStatus(
@@ -276,7 +284,10 @@ function normaliseCapturedKey(event: JSX.TargetedKeyboardEvent<HTMLButtonElement
 
 function HotkeysPanel(): JSX.Element {
   const snapshot = rendererSnapshot.value;
-  const sites = useMemo(() => snapshot?.sites ?? [], [snapshot]);
+  const sites = useMemo(
+    () => (snapshot?.sites ?? []).filter((site) => (site.lifecycle ?? 'active') === 'active'),
+    [snapshot],
+  );
   const hotkeys = useMemo<RendererHotkeySettings>(
     () => snapshot?.settings.hotkeys ?? { enabled: true, bindings: [] },
     [snapshot],
@@ -445,11 +456,123 @@ function HotkeysPanel(): JSX.Element {
   );
 }
 
+function ScheduledCheckinPanel(): JSX.Element {
+  const snapshot = rendererSnapshot.value;
+  const schedule = snapshot?.settings.checkinSchedule ?? {
+    enabled: false,
+    time: '09:00',
+    lastRunDate: null,
+  };
+  const targetCount = useMemo(() => {
+    let count = 0;
+    for (const category of snapshot?.tasks.categories ?? []) {
+      for (const site of category.sites) {
+        if (site.checkin?.enabled) count += 1;
+      }
+    }
+    return count;
+  }, [snapshot]);
+  const [pending, setPending] = useState(false);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+
+  const save = async (enabled: boolean, time: string): Promise<void> => {
+    if (pending) return;
+    setPending(true);
+    setFeedback(null);
+    try {
+      const response = unwrapIpcResult(
+        await window.reftrack.settings.setCheckinSchedule({ enabled, time }),
+      );
+      publishSnapshot(response.snapshot);
+      setFeedback({
+        tone: 'success',
+        title: enabled ? 'Daily check-in scheduled' : 'Daily check-in disabled',
+        message: enabled
+          ? `Next run is scheduled for ${time} local time.`
+          : 'No daily run is scheduled.',
+      });
+    } catch (error) {
+      setFeedback({
+        tone: 'danger',
+        title: 'Schedule was not saved',
+        message: errorMessage(error, 'RefTrack could not save the daily check-in schedule.'),
+      });
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <section
+      class="settings-panel settings-panel--checkin"
+      aria-labelledby="checkin-schedule-title"
+    >
+      <header class="settings-panel__header">
+        <span class="settings-panel__icon settings-panel__icon--green" aria-hidden="true">
+          <ActivityIcon size={20} />
+        </span>
+        <div>
+          <span class="settings-eyebrow">Background schedule</span>
+          <h2 id="checkin-schedule-title">Daily auto check-in</h2>
+          <p>Runs enabled Daily Tasks sites while RefTrack remains in the tray.</p>
+        </div>
+      </header>
+
+      {feedback ? (
+        <div
+          class={`settings-feedback settings-feedback--${feedback.tone}`}
+          role={feedback.tone === 'danger' ? 'alert' : 'status'}
+        >
+          <strong>{feedback.title}</strong>
+          <span>{feedback.message}</span>
+        </div>
+      ) : null}
+
+      <div class="settings-control-card settings-checkin-schedule">
+        <ToggleSwitch
+          id="settings-checkin-schedule-enabled"
+          label="Enable daily auto check-in"
+          description={`${targetCount} check-in site${targetCount === 1 ? '' : 's'} currently enabled`}
+          checked={schedule.enabled}
+          pending={pending}
+          onChange={(enabled) => void save(enabled, schedule.time)}
+        />
+
+        <label class="settings-checkin-time" htmlFor="settings-checkin-schedule-time">
+          <span>
+            <strong>Run time</strong>
+            <small>Local computer time</small>
+          </span>
+          <input
+            id="settings-checkin-schedule-time"
+            type="time"
+            value={schedule.time}
+            disabled={pending}
+            onChange={(event) => void save(schedule.enabled, event.currentTarget.value)}
+          />
+        </label>
+
+        <div class="settings-checkin-summary" role="status">
+          <span>{schedule.enabled ? `Daily at ${schedule.time}` : 'Schedule off'}</span>
+          <span>
+            {schedule.lastRunDate
+              ? `Last scheduled attempt: ${schedule.lastRunDate}`
+              : 'Not run yet'}
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function SettingsScreen({ active }: { active: boolean }): JSX.Element {
   const snapshot = rendererSnapshot.value;
   const enabled = snapshot?.settings.folderClearEnabled ?? false;
   const folderPath = snapshot?.settings.folderClearPath ?? null;
   const hotkey = snapshot?.settings.folderClearHotkey ?? null;
+  const compressorEnabled = snapshot?.settings.imageCompressorEnabled ?? false;
+  const compressorPath = snapshot?.settings.imageCompressorPath ?? null;
+  const compressorQuality = snapshot?.settings.imageCompressorQuality ?? 70;
   const [recordingHotkey, setRecordingHotkey] = useState(false);
   const status = useMemo(() => cleanerStatus(enabled, folderPath), [enabled, folderPath]);
   const [pending, setPending] = useState<PendingAction>(null);
@@ -529,6 +652,62 @@ export function SettingsScreen({ active }: { active: boolean }): JSX.Element {
       setFeedback({
         tone: 'success',
         title: 'Cleaner folder selected',
+        message: response.folderPath,
+      });
+    } catch (error) {
+      setFeedback({
+        tone: 'danger',
+        title: 'Folder was not selected',
+        message: errorMessage(error, 'RefTrack could not use that folder.'),
+      });
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const changeCompressorEnabled = async (nextEnabled: boolean): Promise<void> => {
+    if (pending) return;
+    setPending('toggle-compressor');
+    setFeedback(null);
+    try {
+      const response = unwrapIpcResult(
+        await window.reftrack.settings.setImageCompressorEnabled({ enabled: nextEnabled }),
+      );
+      publishSnapshot(response.snapshot);
+      setFeedback({
+        tone: 'success',
+        title: nextEnabled ? 'Image Compressor enabled' : 'Image Compressor disabled',
+        message:
+          nextEnabled && !response.snapshot.settings.imageCompressorPath
+            ? 'Choose a dedicated folder before automatic compression can run.'
+            : nextEnabled
+              ? 'New images in the folder will become lower-quality JPG files, then originals will be deleted.'
+              : 'New images will no longer be compressed automatically.',
+      });
+    } catch (error) {
+      setFeedback({
+        tone: 'danger',
+        title: 'Setting was not changed',
+        message: errorMessage(error, 'RefTrack could not save the Image Compressor setting.'),
+      });
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const selectCompressorFolder = async (): Promise<void> => {
+    if (pending) return;
+    setPending('select-compressor-folder');
+    setFeedback(null);
+    try {
+      const response = unwrapIpcResult(
+        await window.reftrack.settings.selectImageCompressorFolder(),
+      );
+      publishSnapshot(response.snapshot);
+      if (!response.selected || !response.folderPath) return;
+      setFeedback({
+        tone: 'success',
+        title: 'Compressor folder selected',
         message: response.folderPath,
       });
     } catch (error) {
@@ -815,6 +994,79 @@ export function SettingsScreen({ active }: { active: boolean }): JSX.Element {
           </section>
 
           <HotkeysPanel />
+
+          <ScheduledCheckinPanel />
+
+          <section
+            class="settings-panel settings-panel--compressor"
+            aria-labelledby="image-compressor-title"
+          >
+            <header class="settings-panel__header">
+              <span class="settings-panel__icon settings-panel__icon--orange" aria-hidden="true">
+                <FolderIcon size={20} />
+              </span>
+              <div>
+                <span class="settings-eyebrow">Watched folder</span>
+                <h2 id="image-compressor-title">Image Compressor</h2>
+                <p>
+                  Convert new images in one dedicated folder to lower-quality JPG files, then delete
+                  the original files after conversion succeeds.
+                </p>
+              </div>
+            </header>
+
+            <div class="settings-control-card">
+              <ToggleSwitch
+                id="settings-image-compressor-enabled"
+                label="Enable automatic compression"
+                description={`Quality ${compressorQuality} JPG output. Originals are deleted only after the compressed file is written.`}
+                checked={compressorEnabled}
+                pending={pending === 'toggle-compressor'}
+                disabled={pending !== null && pending !== 'toggle-compressor'}
+                onChange={(checked) => void changeCompressorEnabled(checked)}
+              />
+            </div>
+
+            <div class="settings-folder-card">
+              <div class="settings-folder-card__copy">
+                <span class="settings-folder-card__label">Compression folder</span>
+                {compressorPath ? (
+                  <code class="settings-folder-path" title={compressorPath}>
+                    {compressorPath}
+                  </code>
+                ) : (
+                  <span class="settings-folder-card__empty">No folder selected</span>
+                )}
+              </div>
+              <Button
+                size="small"
+                variant="secondary"
+                pending={pending === 'select-compressor-folder'}
+                disabled={pending !== null && pending !== 'select-compressor-folder'}
+                leadingIcon={<FolderIcon size={15} />}
+                onClick={() => void selectCompressorFolder()}
+              >
+                {compressorPath ? 'Change folder' : 'Choose folder'}
+              </Button>
+            </div>
+
+            <section class="settings-safety" aria-labelledby="compressor-safety-title">
+              <header>
+                <span aria-hidden="true">
+                  <ShieldIcon size={18} />
+                </span>
+                <h3 id="compressor-safety-title">Conversion rules</h3>
+              </header>
+              <ul>
+                <li>Only new top-level image files in the selected folder are watched.</li>
+                <li>
+                  Compressed files are written as <code>.reftrack.jpg</code> files.
+                </li>
+                <li>The original image is deleted only after the JPG output is created.</li>
+                <li>Existing files are not converted when you first choose the folder.</li>
+              </ul>
+            </section>
+          </section>
 
           <section
             class="settings-panel settings-panel--recent"

@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 import { app, globalShortcut, session } from 'electron';
-import type { BrowserWindow } from 'electron';
+import type { BrowserWindow, Tray } from 'electron';
 
 import { createPerformanceBaseline } from './performance-baseline';
 import { registerIpcHandlers } from './ipc/register-handlers';
@@ -11,6 +11,7 @@ import {
   registerApplicationScheme,
 } from './application/application-protocol';
 import { APP_ID, MAIN_SESSION_PARTITION } from './application/constants';
+import { createApplicationTray } from './application/application-tray';
 import { createMainWindow } from './application/create-main-window';
 import { configureMainSession } from './application/security-policy';
 import { acquireSingleInstanceLock } from './application/single-instance';
@@ -22,6 +23,7 @@ registerApplicationScheme();
 const performanceBaseline = createPerformanceBaseline({ app });
 const development = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
+let applicationTray: Tray | null = null;
 let ipcRegistration: IpcHandlerRegistration | null = null;
 let hotkeyService: HotkeyService | null = null;
 
@@ -75,7 +77,11 @@ async function startApplication(): Promise<void> {
     mainWindow = null;
   });
 
+  applicationTray = createApplicationTray(() => mainWindow);
+  ipcRegistration.startBackgroundServices();
+
   hotkeyService.sync(stateService.getSnapshot());
+  hotkeyService.registerShareQueueAdvanceHotkey();
 }
 
 if (!acquireSingleInstanceLock(app, () => mainWindow)) {
@@ -90,6 +96,8 @@ if (!acquireSingleInstanceLock(app, () => mainWindow)) {
     });
 
   app.on('before-quit', () => {
+    applicationTray?.destroy();
+    applicationTray = null;
     ipcRegistration?.dispose();
     ipcRegistration = null;
     hotkeyService?.dispose();

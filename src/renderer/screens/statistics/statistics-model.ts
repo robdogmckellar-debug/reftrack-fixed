@@ -186,16 +186,29 @@ export function getMonthTotals(
   return totals;
 }
 
+function getYearMonthTotals(snapshot: RendererSnapshot, year: number): StatisticsTotals[] {
+  const months = Array.from({ length: 12 }, createTotals);
+  for (let month = 0; month < 12; month += 1) {
+    const monthTotals = months[month] ?? createTotals();
+    for (const key of getDateKeysForMonth(year, month)) {
+      addTotals(monthTotals, getDayTotals(snapshot, key));
+    }
+  }
+  return months;
+}
+
 export function getYearTotals(snapshot: RendererSnapshot, year: number): StatisticsTotals {
   const totals = createTotals();
-  for (let month = 0; month < 12; month += 1) {
-    addTotals(totals, getMonthTotals(snapshot, year, month));
-  }
+  for (const monthTotals of getYearMonthTotals(snapshot, year)) addTotals(totals, monthTotals);
   return totals;
 }
 
-function siteName(snapshot: RendererSnapshot, siteId: string): string {
-  return snapshot.sites.find((site) => site.id === siteId)?.name ?? siteId;
+function siteNameLookup(snapshot: RendererSnapshot): ReadonlyMap<string, string> {
+  return new Map(snapshot.sites.map((site) => [site.id, site.name]));
+}
+
+function siteName(namesBySiteId: ReadonlyMap<string, string>, siteId: string): string {
+  return namesBySiteId.get(siteId) ?? siteId;
 }
 
 export function getSiteTotalsForKeys(
@@ -203,6 +216,7 @@ export function getSiteTotalsForKeys(
   keys: readonly string[],
 ): readonly SiteStatisticsTotals[] {
   const totalsBySite = new Map<string, SiteStatisticsTotals>();
+  const namesBySiteId = siteNameLookup(snapshot);
 
   for (const key of keys) {
     const day = snapshot.dailyState[key];
@@ -213,7 +227,7 @@ export function getSiteTotalsForKeys(
       if (!totals) {
         totals = {
           siteId,
-          name: siteName(snapshot, siteId),
+          name: siteName(namesBySiteId, siteId),
           earnings: 0,
           successes: 0,
           copies: 0,
@@ -270,17 +284,15 @@ export function buildLeaderboard(
 }
 
 export function buildYearStatistics(snapshot: RendererSnapshot, year: number): YearStatistics {
-  const months = Array.from({ length: 12 }, (_, month): MonthStatistics => {
-    const totals = getMonthTotals(snapshot, year, month);
-    return {
-      month,
-      name: MONTH_NAMES[month] ?? '',
-      shortName: (MONTH_NAMES[month] ?? '').slice(0, 3),
-      totals,
-      hasData: hasStatisticsData(totals),
-      earningsPercentage: 0,
-    };
-  });
+  const totalsByMonth = getYearMonthTotals(snapshot, year);
+  const months = totalsByMonth.map((totals, month): MonthStatistics => ({
+    month,
+    name: MONTH_NAMES[month] ?? '',
+    shortName: (MONTH_NAMES[month] ?? '').slice(0, 3),
+    totals,
+    hasData: hasStatisticsData(totals),
+    earningsPercentage: 0,
+  }));
 
   const maximumEarnings = Math.max(1, ...months.map((month) => month.totals.earnings));
   const normalisedMonths = months.map((month) => ({
@@ -319,6 +331,7 @@ export function buildMonthDrilldown(
   const weeks: WeekStatistics[] = [];
   const cursor = new Date(firstMonday);
   let weekNumber = 1;
+  const monthTotals = createTotals();
 
   while (cursor <= last) {
     const dates = Array.from({ length: 7 }, () => {
@@ -350,6 +363,7 @@ export function buildMonthDrilldown(
       totals,
       days,
     });
+    addTotals(monthTotals, totals);
     weekNumber += 1;
   }
 
@@ -367,7 +381,7 @@ export function buildMonthDrilldown(
     year,
     month,
     name: MONTH_NAMES[month] ?? '',
-    totals: getMonthTotals(snapshot, year, month),
+    totals: monthTotals,
     weeks,
     topSites,
   };
@@ -377,15 +391,23 @@ export function buildDayDrilldown(snapshot: RendererSnapshot, key: string): DayD
   const date = parseDateKey(key);
   if (!date) return null;
   const day = snapshot.dailyState[key] ?? {};
-  const sites = Object.entries(day)
-    .map(([siteId, metrics]) => ({
+  const namesBySiteId = siteNameLookup(snapshot);
+  const totals = createTotals();
+  const siteTotals: SiteStatisticsTotals[] = [];
+
+  for (const [siteId, metrics] of Object.entries(day)) {
+    addMetrics(totals, metrics);
+    const site = {
       siteId,
-      name: siteName(snapshot, siteId),
+      name: siteName(namesBySiteId, siteId),
       earnings: metrics.earnings || 0,
       successes: metrics.successes || 0,
       copies: metrics.copies || 0,
-    }))
-    .filter((site) => hasStatisticsData(site))
+    };
+    if (hasStatisticsData(site)) siteTotals.push(site);
+  }
+
+  const sites = siteTotals
     .sort((left, right) => {
       if (right.earnings !== left.earnings) return right.earnings - left.earnings;
       if (right.successes !== left.successes) return right.successes - left.successes;
@@ -402,7 +424,7 @@ export function buildDayDrilldown(snapshot: RendererSnapshot, key: string): DayD
       month: 'long',
       year: 'numeric',
     }).format(date),
-    totals: getDayTotals(snapshot, key),
+    totals,
     sites,
   };
 }

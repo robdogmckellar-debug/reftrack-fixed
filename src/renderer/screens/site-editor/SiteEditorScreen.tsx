@@ -30,7 +30,12 @@ type EditorSelection =
   | { kind: 'new'; returnSiteId: string | null };
 
 type PendingIntent =
-  { kind: 'select'; siteId: string } | { kind: 'create' } | { kind: 'navigate'; screen: ScreenId };
+  | { kind: 'select'; siteId: string }
+  | { kind: 'create' }
+  | { kind: 'navigate'; screen: ScreenId }
+  | { kind: 'lifecycle'; lifecycle: SiteLifecycle };
+
+type SiteLifecycle = 'active' | 'archived' | 'trashed';
 
 const ALL_FIELDS: readonly SiteEditorField[] = [
   'name',
@@ -40,6 +45,14 @@ const ALL_FIELDS: readonly SiteEditorField[] = [
   'dateFormat',
   'bonus',
   'maxCopiesPerDay',
+  'notes',
+  'payoutThreshold',
+  'appClaimEnabled',
+  'appClaimDownloadUrl',
+  'appClaimApkPath',
+  'appClaimPackageName',
+  'appClaimDeepLinkUrl',
+  'appClaimAvdName',
 ];
 
 function fieldElementId(field: SiteEditorField): string {
@@ -65,7 +78,17 @@ function nextSiteAfterDeletion(
 
 export function SiteEditorScreen({ active }: { active: boolean }): JSX.Element {
   const snapshot = rendererSnapshot.value;
-  const sites = snapshot?.sites ?? [];
+  const allSites = snapshot?.sites ?? [];
+  const [lifecycle, setLifecycle] = useState<SiteLifecycle>('active');
+  const sites = useMemo(
+    () => allSites.filter((site) => (site.lifecycle ?? 'active') === lifecycle),
+    [allSites, lifecycle],
+  );
+  const counts = useMemo(() => {
+    const nextCounts = { active: 0, archived: 0, trashed: 0 };
+    for (const site of allSites) nextCounts[site.lifecycle ?? 'active'] += 1;
+    return nextCounts;
+  }, [allSites]);
   const [selection, setSelection] = useState<EditorSelection>({ kind: 'none' });
   const [draft, setDraft] = useState<SiteEditorDraft>(createEmptySiteDraft);
   const [baseline, setBaseline] = useState<SiteEditorDraft>(createEmptySiteDraft);
@@ -74,6 +97,8 @@ export function SiteEditorScreen({ active }: { active: boolean }): JSX.Element {
   const [serverErrors, setServerErrors] = useState<Partial<Record<SiteEditorField, string>>>({});
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [lifecyclePending, setLifecyclePending] = useState(false);
+  const [appClaimPending, setAppClaimPending] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<EditorFeedback | null>(null);
   const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -83,7 +108,7 @@ export function SiteEditorScreen({ active }: { active: boolean }): JSX.Element {
   const creating = selection.kind === 'new';
   const selectedSiteId = selection.kind === 'site' ? selection.siteId : null;
   const selectedSite =
-    selectedSiteId === null ? null : (sites.find((site) => site.id === selectedSiteId) ?? null);
+    selectedSiteId === null ? null : (allSites.find((site) => site.id === selectedSiteId) ?? null);
   const dirty = !sameSiteDraft(draft, baseline);
   const validation = useMemo(
     () => validateSiteDraft(draft, selectedSiteId),
@@ -189,6 +214,17 @@ export function SiteEditorScreen({ active }: { active: boolean }): JSX.Element {
     return true;
   };
 
+  const switchLifecycleView = (nextLifecycle: SiteLifecycle): void => {
+    if (nextLifecycle === lifecycle) return;
+    if (dirty) {
+      setPendingIntent({ kind: 'lifecycle', lifecycle: nextLifecycle });
+      return;
+    }
+    setLifecycle(nextLifecycle);
+    setSelection({ kind: 'none' });
+    resetInteractionState();
+  };
+
   const discardAndContinue = (): void => {
     const intent = pendingIntent;
     setPendingIntent(null);
@@ -207,6 +243,14 @@ export function SiteEditorScreen({ active }: { active: boolean }): JSX.Element {
       return;
     }
 
+    if (intent.kind === 'lifecycle') {
+      setDraft(baseline);
+      setLifecycle(intent.lifecycle);
+      setSelection({ kind: 'none' });
+      resetInteractionState();
+      return;
+    }
+
     const site = sites.find((candidate) => candidate.id === intent.siteId);
     if (site) {
       loadSite(site);
@@ -214,7 +258,7 @@ export function SiteEditorScreen({ active }: { active: boolean }): JSX.Element {
     }
   };
 
-  const changeField = (field: SiteEditorField, value: string): void => {
+  const changeField = (field: SiteEditorField, value: string | boolean): void => {
     setDraft((current) => ({ ...current, [field]: value }));
     setServerErrors((current) => {
       if (!current[field]) return current;
@@ -313,10 +357,162 @@ export function SiteEditorScreen({ active }: { active: boolean }): JSX.Element {
     }
   };
 
+  const selectApk = async (): Promise<void> => {
+    if (appClaimPending) return;
+    setAppClaimPending('select-apk');
+    try {
+      const result = unwrapIpcResult(await window.reftrack.sites.selectApk());
+      if (!result.selected || !result.filePath) return;
+      changeField('appClaimApkPath', result.filePath);
+      markTouched('appClaimApkPath');
+      setFeedback({ tone: 'success', message: 'APK selected.' });
+    } catch (error) {
+      setFeedback({
+        tone: 'danger',
+        message: errorMessage(error, 'RefTrack could not select an APK.'),
+      });
+    } finally {
+      setAppClaimPending(null);
+    }
+  };
+
+  const installApk = async (): Promise<void> => {
+    if (appClaimPending || !draft.appClaimApkPath.trim()) return;
+    setAppClaimPending('install-apk');
+    try {
+      const result = unwrapIpcResult(
+        await window.reftrack.sites.installApk({
+          apkPath: draft.appClaimApkPath,
+          avdName: draft.appClaimAvdName.trim() || null,
+        }),
+      );
+      if (result.packageName) {
+        changeField('appClaimPackageName', result.packageName);
+        markTouched('appClaimPackageName');
+      }
+      setFeedback({
+        tone: 'success',
+        message: result.packageName
+          ? `APK installed. Package name filled: ${result.packageName}.`
+          : 'APK installed in the connected emulator.',
+      });
+    } catch (error) {
+      setFeedback({
+        tone: 'danger',
+        message: errorMessage(error, 'RefTrack could not install the APK through adb.'),
+      });
+    } finally {
+      setAppClaimPending(null);
+    }
+  };
+
+  const launchAndroidPackage = async (): Promise<void> => {
+    if (appClaimPending || !draft.appClaimPackageName.trim()) return;
+    setAppClaimPending('launch-package');
+    try {
+      unwrapIpcResult(
+        await window.reftrack.sites.launchAndroidPackage({
+          packageName: draft.appClaimPackageName.trim(),
+          avdName: draft.appClaimAvdName.trim() || null,
+        }),
+      );
+      setFeedback({ tone: 'success', message: 'Android app launched in the emulator.' });
+    } catch (error) {
+      setFeedback({
+        tone: 'danger',
+        message: errorMessage(error, 'RefTrack could not launch that Android package.'),
+      });
+    } finally {
+      setAppClaimPending(null);
+    }
+  };
+
+  const openAppClaimLink = async (kind: 'download' | 'deep-link'): Promise<void> => {
+    if (appClaimPending) return;
+    const url =
+      kind === 'download' ? draft.appClaimDownloadUrl.trim() : draft.appClaimDeepLinkUrl.trim();
+    if (!url) return;
+    setAppClaimPending(kind === 'download' ? 'open-download' : 'open-deep-link');
+    try {
+      if (kind === 'download') unwrapIpcResult(await window.reftrack.external.open({ url }));
+      else {
+        unwrapIpcResult(
+          await window.reftrack.sites.openAndroidDeepLink({
+            url,
+            avdName: draft.appClaimAvdName.trim() || null,
+          }),
+        );
+      }
+      setFeedback({
+        tone: 'info',
+        message: kind === 'download' ? 'Download page opened.' : 'Deep link sent to emulator.',
+      });
+    } catch (error) {
+      setFeedback({
+        tone: 'danger',
+        message: errorMessage(error, 'RefTrack could not open that app-claim link.'),
+      });
+    } finally {
+      setAppClaimPending(null);
+    }
+  };
+
+  const changeSiteLifecycle = async (nextLifecycle: SiteLifecycle): Promise<void> => {
+    if (!selectedSite || lifecyclePending || dirty) return;
+    setLifecyclePending(true);
+    try {
+      const response = unwrapIpcResult(
+        await window.reftrack.sites.setLifecycle({
+          siteId: selectedSite.id,
+          lifecycle: nextLifecycle,
+          occurredAt: new Date().toISOString(),
+        }),
+      );
+      publishSnapshot(response.snapshot);
+      setLifecycle(nextLifecycle);
+      const updated = response.snapshot.sites.find((site) => site.id === selectedSite.id);
+      if (updated) loadSite(updated);
+      setFeedback({
+        tone: 'info',
+        message:
+          nextLifecycle === 'active'
+            ? `${selectedSite.name} restored to Active.`
+            : `${selectedSite.name} archived with its statistics intact.`,
+      });
+    } catch (error) {
+      setFeedback({
+        tone: 'danger',
+        message: errorMessage(error, 'RefTrack could not update this site.'),
+      });
+    } finally {
+      setLifecyclePending(false);
+    }
+  };
+
   const confirmDelete = async (): Promise<void> => {
     if (!selectedSite || deleting) return;
     setDeleting(true);
     try {
+      if ((selectedSite.lifecycle ?? 'active') !== 'trashed') {
+        const response = unwrapIpcResult(
+          await window.reftrack.sites.setLifecycle({
+            siteId: selectedSite.id,
+            lifecycle: 'trashed',
+            occurredAt: new Date().toISOString(),
+          }),
+        );
+        publishSnapshot(response.snapshot);
+        setLifecycle('trashed');
+        const recycled = response.snapshot.sites.find((site) => site.id === selectedSite.id);
+        if (recycled) loadSite(recycled);
+        setDeleteDialogOpen(false);
+        setFeedback({
+          tone: 'info',
+          message: `${selectedSite.name} moved to the recycle bin. Its statistics are intact.`,
+        });
+        return;
+      }
+
       const response = unwrapIpcResult(
         await window.reftrack.sites.delete({
           siteId: selectedSite.id,
@@ -324,7 +520,10 @@ export function SiteEditorScreen({ active }: { active: boolean }): JSX.Element {
         }),
       );
       const deletedName = selectedSite.name;
-      const nextSite = nextSiteAfterDeletion(sites, response.snapshot.sites, selectedSite.id);
+      const remainingRecycled = response.snapshot.sites.filter(
+        (site) => site.lifecycle === 'trashed',
+      );
+      const nextSite = nextSiteAfterDeletion(sites, remainingRecycled, selectedSite.id);
       publishSnapshot(response.snapshot);
       setDeleteDialogOpen(false);
       setTouched(new Set());
@@ -342,7 +541,7 @@ export function SiteEditorScreen({ active }: { active: boolean }): JSX.Element {
         setDraft(empty);
         setBaseline(empty);
       }
-      setFeedback({ tone: 'info', message: `${deletedName} deleted with its statistics.` });
+      setFeedback({ tone: 'info', message: `${deletedName} permanently deleted.` });
     } catch (error) {
       setDeleteDialogOpen(false);
       setFeedback({
@@ -370,8 +569,11 @@ export function SiteEditorScreen({ active }: { active: boolean }): JSX.Element {
         sites={sites}
         selectedSiteId={selectedSiteId}
         creating={creating}
+        lifecycle={lifecycle}
+        counts={counts}
         onCreate={requestCreate}
         onSelect={requestSiteSelection}
+        onLifecycleChange={switchLifecycleView}
       />
 
       {selection.kind === 'none' ? (
@@ -380,14 +582,25 @@ export function SiteEditorScreen({ active }: { active: boolean }): JSX.Element {
             <EditIcon size={38} />
           </span>
           <span class="site-editor-eyebrow">Site Editor</span>
-          <h2 id="site-editor-empty-title">Add your first referral site</h2>
+          <h2 id="site-editor-empty-title">
+            {lifecycle === 'active'
+              ? 'Add your first referral site'
+              : lifecycle === 'archived'
+                ? 'No archived sites'
+                : 'Recycle bin is empty'}
+          </h2>
           <p>
-            Configure the URL, copy format, success bonus, and daily limit. RefTrack keeps the data
-            locally on this computer.
+            {lifecycle === 'active'
+              ? 'Configure the URL, copy format, success bonus, and daily limit. RefTrack keeps the data locally on this computer.'
+              : lifecycle === 'archived'
+                ? 'Sites you archive will remain available here with their statistics intact.'
+                : 'Sites moved to the recycle bin remain recoverable until you delete them forever.'}
           </p>
-          <Button variant="primary" onClick={() => requestCreate()}>
-            Add a site
-          </Button>
+          {lifecycle === 'active' ? (
+            <Button variant="primary" onClick={() => requestCreate()}>
+              Add a site
+            </Button>
+          ) : null}
           {feedback ? (
             <div class={`site-editor-empty-feedback site-editor-empty-feedback--${feedback.tone}`}>
               {feedback.message}
@@ -402,13 +615,21 @@ export function SiteEditorScreen({ active }: { active: boolean }): JSX.Element {
           creating={creating}
           dirty={dirty}
           saving={saving}
+          lifecyclePending={lifecyclePending || deleting}
+          appClaimPending={appClaimPending}
           feedback={feedback}
           onChange={changeField}
           onFieldBlur={markTouched}
           onSubmit={(event) => void submit(event)}
           onCancel={cancel}
           onDelete={() => setDeleteDialogOpen(true)}
+          onArchive={() => void changeSiteLifecycle('archived')}
+          onRestore={() => void changeSiteLifecycle('active')}
           onOpenLink={() => void openLink()}
+          onSelectApk={() => void selectApk()}
+          onInstallApk={() => void installApk()}
+          onLaunchAndroidPackage={() => void launchAndroidPackage()}
+          onOpenAppClaimLink={(kind) => void openAppClaimLink(kind)}
         />
       )}
 
@@ -440,8 +661,16 @@ export function SiteEditorScreen({ active }: { active: boolean }): JSX.Element {
 
       <Dialog
         open={deleteDialogOpen && selectedSite !== null}
-        title={`Delete ${selectedSite?.name ?? 'site'}?`}
-        description="This permanently removes the site from RefTrack."
+        title={
+          selectedSite?.lifecycle === 'trashed'
+            ? `Delete ${selectedSite.name} forever?`
+            : `Move ${selectedSite?.name ?? 'site'} to the recycle bin?`
+        }
+        description={
+          selectedSite?.lifecycle === 'trashed'
+            ? 'This permanently removes the site and cannot be undone.'
+            : 'The site will leave active workflows but can still be restored.'
+        }
         initialFocusRef={cancelDeleteRef}
         closeOnBackdrop={!deleting}
         onClose={() => {
@@ -458,15 +687,24 @@ export function SiteEditorScreen({ active }: { active: boolean }): JSX.Element {
               Cancel
             </Button>
             <Button variant="danger" pending={deleting} onClick={() => void confirmDelete()}>
-              Delete site
+              {selectedSite?.lifecycle === 'trashed' ? 'Delete forever' : 'Move to recycle bin'}
             </Button>
           </>
         }
       >
         <div class="site-editor-delete-summary">
           <p>
-            <strong>{selectedSite?.name}</strong>, its copy history, successes, earnings, and
-            activity entries will be deleted.
+            {selectedSite?.lifecycle === 'trashed' ? (
+              <>
+                <strong>{selectedSite.name}</strong>, its copy history, successes, earnings, notes,
+                and activity entries will be permanently deleted.
+              </>
+            ) : (
+              <>
+                <strong>{selectedSite?.name}</strong> and all of its history will remain intact in
+                the recycle bin.
+              </>
+            )}
           </p>
           {dirty ? <p>Any unsaved edits in the form will also be discarded.</p> : null}
         </div>

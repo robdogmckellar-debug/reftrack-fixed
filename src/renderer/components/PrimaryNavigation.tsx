@@ -2,7 +2,15 @@ import type { ComponentType, JSX } from 'preact';
 
 import { activeScreen, navigateTo, SCREEN_IDS } from '../app/store';
 import type { ScreenId } from '../app/store';
-import { DashboardIcon, EditIcon, SettingsIcon, StatisticsIcon, TasksIcon } from './icons';
+import {
+  DashboardIcon,
+  ClipboardIcon,
+  EarningsIcon,
+  EditIcon,
+  SettingsIcon,
+  StatisticsIcon,
+  TasksIcon,
+} from './icons';
 
 interface NavigationItem {
   id: ScreenId;
@@ -14,6 +22,8 @@ interface NavigationItem {
 const NAVIGATION_ITEMS: readonly NavigationItem[] = [
   { id: 'dashboard', label: 'Dashboard', shortLabel: 'Home', icon: DashboardIcon },
   { id: 'editor', label: 'Site Editor', shortLabel: 'Sites', icon: EditIcon },
+  { id: 'share', label: 'Facebook Group Shares', shortLabel: 'Shares', icon: ClipboardIcon },
+  { id: 'payouts', label: 'Payouts', shortLabel: 'Paid', icon: EarningsIcon },
   { id: 'statistics', label: 'Statistics', shortLabel: 'Stats', icon: StatisticsIcon },
   { id: 'settings', label: 'Settings', shortLabel: 'Settings', icon: SettingsIcon },
   { id: 'tasks', label: 'Daily Tasks', shortLabel: 'Tasks', icon: TasksIcon },

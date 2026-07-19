@@ -21,6 +21,7 @@ export interface HotkeyServiceOptions {
  */
 export class HotkeyService {
   private readonly registeredKeys = new Set<string>();
+  private registeredShareQueueAdvanceKey: string | null = null;
 
   constructor(private readonly options: HotkeyServiceOptions) {}
 
@@ -28,7 +29,9 @@ export class HotkeyService {
     this.unregisterAll();
     if (!state.settings.hotkeys.enabled) return;
 
-    const orderedSiteIds = state.sites.map((site) => site.id);
+    const orderedSiteIds = state.sites
+      .filter((site) => (site.lifecycle ?? 'active') === 'active')
+      .map((site) => site.id);
     const bindings = resolveHotkeyBindings(orderedSiteIds, state.settings.hotkeys);
 
     for (const [siteId, key] of bindings) {
@@ -52,8 +55,37 @@ export class HotkeyService {
     this.registeredKeys.clear();
   }
 
+  registerShareQueueAdvanceHotkey(accelerator = 'CommandOrControl+Alt+N'): boolean {
+    if (this.registeredShareQueueAdvanceKey === accelerator) return true;
+    if (this.registeredShareQueueAdvanceKey) {
+      this.options.globalShortcut.unregister(this.registeredShareQueueAdvanceKey);
+      this.registeredShareQueueAdvanceKey = null;
+    }
+
+    try {
+      const registered = this.options.globalShortcut.register(accelerator, () => {
+        const window = this.options.getMainWindow();
+        if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return;
+        window.webContents.send(IPC_CHANNELS.shareQueueAdvanceTriggered, { accelerator });
+      });
+      if (registered) this.registeredShareQueueAdvanceKey = accelerator;
+      return registered;
+    } catch (error: unknown) {
+      console.warn(`[RefTrack] Could not register share queue hotkey "${accelerator}":`, error);
+      return false;
+    }
+  }
+
   dispose(): void {
     this.unregisterAll();
+    if (this.registeredShareQueueAdvanceKey) {
+      try {
+        this.options.globalShortcut.unregister(this.registeredShareQueueAdvanceKey);
+      } catch {
+        // Ignore: the shortcut may already be gone during app shutdown.
+      }
+      this.registeredShareQueueAdvanceKey = null;
+    }
   }
 
   private dispatch(siteId: string): void {

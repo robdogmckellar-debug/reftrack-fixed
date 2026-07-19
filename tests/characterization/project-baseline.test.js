@@ -113,8 +113,9 @@ describe('Windows-only secure application shell baseline', () => {
     expect(windowSource).toContain('titleBarOverlay:');
   });
 
-  it('removes obsolete platform and tray code and disallows inline renderer scripts', () => {
+  it('supports the notification-area control and disallows inline renderer scripts', () => {
     const mainSource = read('src/main/index.ts');
+    const traySource = read('src/main/application/application-tray.ts');
     const preloadSource = read('src/preload/index.ts');
     const html = read('src/renderer/index.html');
     const csp = html.match(/Content-Security-Policy"\s+content="([^"]+)"/)?.[1] ?? '';
@@ -123,9 +124,11 @@ describe('Windows-only secure application shell baseline', () => {
       expect(source).not.toContain('get-platform');
       expect(source).not.toContain('getPlatform');
       expect(source).not.toContain('nativeImage');
-      expect(source).not.toContain('Tray');
       expect(source).not.toContain("'darwin'");
     }
+    expect(mainSource).toContain('createApplicationTray');
+    expect(traySource).toContain('new Tray');
+    expect(preloadSource).toContain('hideToTray');
     expect(csp).toContain("script-src 'self'");
     expect(csp).not.toMatch(/script-src[^;]*'unsafe-inline'/);
     expect(csp).toContain("object-src 'none'");

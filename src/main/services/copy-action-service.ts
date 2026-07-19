@@ -18,7 +18,7 @@ export interface ImageCleanupCoordinatorPort {
 export interface CopyActionServiceOptions {
   commands: CopyCommandPort;
   cleanupCoordinator: ImageCleanupCoordinatorPort;
-  writeClipboard(text: string): void;
+  writeClipboard(text: string, imagePath?: string | null): void;
 }
 
 export class CopyActionService {
@@ -38,7 +38,8 @@ export class CopyActionService {
     try {
       this.options.commands.assertCopyAllowed(request.siteId, request.occurredAt);
       try {
-        this.options.writeClipboard(request.text);
+        if (request.imagePath) this.options.writeClipboard(request.text, request.imagePath);
+        else this.options.writeClipboard(request.text);
       } catch (error: unknown) {
         throw new ApplicationError('CLIPBOARD_FAILED', 'Windows could not update the clipboard.', {
           recoverable: true,

@@ -21,6 +21,28 @@ const SiteSchema = z
     dateFormat: z.string().max(100),
     bonusCents: NonNegativeSafeIntegerSchema,
     maxCopiesPerDay: NonNegativeSafeIntegerSchema.max(1000),
+    notes: z.string().max(4000).default(''),
+    lifecycle: z.enum(['active', 'archived', 'trashed']).default('active'),
+    lifecycleChangedAt: IsoTimestampSchema.nullable().default(null),
+    payoutThresholdCents: NonNegativeSafeIntegerSchema.default(0),
+    appClaim: z
+      .object({
+        enabled: z.boolean().default(false),
+        downloadUrl: z.string().max(2048).default(''),
+        apkPath: z.string().max(32767).nullable().default(null),
+        packageName: z.string().max(255).default(''),
+        deepLinkUrl: z.string().max(2048).default(''),
+        avdName: z.string().max(160).default(''),
+      })
+      .strict()
+      .default({
+        enabled: false,
+        downloadUrl: '',
+        apkPath: null,
+        packageName: '',
+        deepLinkUrl: '',
+        avdName: '',
+      }),
   })
   .strict();
 
@@ -43,6 +65,28 @@ const ActivityEntrySchema = z
   })
   .strict();
 
+const PayoutEntrySchema = z
+  .object({
+    id: EntityIdSchema,
+    siteId: EntityIdSchema,
+    amountCents: NonNegativeSafeIntegerSchema.positive(),
+    expectedDate: IsoDateSchema,
+    paidAt: IsoTimestampSchema.nullable(),
+    createdAt: IsoTimestampSchema,
+    note: z.string().max(1000),
+  })
+  .strict();
+
+const FacebookGroupShareSchema = z
+  .object({
+    id: EntityIdSchema,
+    label: z.string().trim().min(1).max(120),
+    groupUrl: z.string().trim().min(1).max(2048),
+    currentPostUrl: z.string().trim().min(1).max(2048).nullable(),
+    useMostRecentPost: z.boolean().default(false),
+  })
+  .strict();
+
 const OptionalPathSchema = z.string().max(2048).optional();
 
 const TaskSiteCheckinSchema = z
@@ -56,6 +100,7 @@ const TaskSiteCheckinSchema = z
 const TaskSiteSchema = z
   .object({
     id: EntityIdSchema,
+    sourceSiteId: EntityIdSchema.optional(),
     name: z.string().trim().min(1).max(100),
     url: z.string().max(2048),
     checkin: TaskSiteCheckinSchema.optional(),
@@ -64,6 +109,12 @@ const TaskSiteSchema = z
 
 const CheckinSettingsSchema = z
   .object({
+    scheduleEnabled: z.boolean().default(false),
+    scheduleTime: z
+      .string()
+      .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, 'Expected a 24-hour HH:mm time')
+      .default('09:00'),
+    lastScheduledRunDate: IsoDateSchema.nullable().default(null),
     loginPath: z.string().max(2048),
     checkinPath: z.string().max(2048),
     usernameSelector: z.string().max(1000),
@@ -124,6 +175,20 @@ export const AppStateV1Schema = z
             hotkey: z.string().max(120).nullable().default(null),
           })
           .strict(),
+        imageCompressor: z
+          .object({
+            enabled: z.boolean(),
+            folderPath: z.string().max(32767).nullable(),
+            quality: z.number().int().min(1).max(100).default(70),
+          })
+          .strict()
+          .default({ enabled: false, folderPath: null, quality: 70 }),
+        facebookGroupShares: z
+          .object({
+            groups: z.array(FacebookGroupShareSchema).max(1000),
+          })
+          .strict()
+          .default({ groups: [] }),
         checkin: CheckinSettingsSchema.default({ ...DEFAULT_CHECKIN_SETTINGS }),
         hotkeys: z
           .object({
@@ -156,6 +221,7 @@ export const AppStateV1Schema = z
     checkinDailyRecords: z
       .record(IsoDateSchema, z.record(EntityIdSchema, CheckinResultRecordSchema))
       .default({}),
+    payouts: z.array(PayoutEntrySchema).max(10000).default([]),
   })
   .strict()
   .superRefine((state, context) => {
@@ -169,6 +235,37 @@ export const AppStateV1Schema = z
         });
       }
       siteIds.add(site.id);
+    });
+
+    const payoutIds = new Set<string>();
+    state.payouts.forEach((payout, index) => {
+      if (payoutIds.has(payout.id)) {
+        context.addIssue({
+          code: 'custom',
+          message: `Duplicate payout ID: ${payout.id}`,
+          path: ['payouts', index, 'id'],
+        });
+      }
+      if (!siteIds.has(payout.siteId)) {
+        context.addIssue({
+          code: 'custom',
+          message: `Unknown payout site ID: ${payout.siteId}`,
+          path: ['payouts', index, 'siteId'],
+        });
+      }
+      payoutIds.add(payout.id);
+    });
+
+    const facebookGroupIds = new Set<string>();
+    state.settings.facebookGroupShares.groups.forEach((group, index) => {
+      if (facebookGroupIds.has(group.id)) {
+        context.addIssue({
+          code: 'custom',
+          message: `Duplicate Facebook group ID: ${group.id}`,
+          path: ['settings', 'facebookGroupShares', 'groups', index, 'id'],
+        });
+      }
+      facebookGroupIds.add(group.id);
     });
 
     const categoryIds = new Set<string>();
@@ -185,5 +282,30 @@ export const AppStateV1Schema = z
   });
 
 export function parseAppState(value: unknown): AppStateV1 {
-  return AppStateV1Schema.parse(value);
+  return AppStateV1Schema.parse(stripRetiredAutoShareFields(value));
+}
+
+function stripRetiredAutoShareFields(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+
+  const state = { ...(value as Record<string, unknown>) };
+  delete state.autoShareRotation;
+
+  if (Array.isArray(state.sites)) {
+    state.sites = state.sites.map((site) => {
+      if (!site || typeof site !== 'object' || Array.isArray(site)) return site;
+      const cleaned = { ...(site as Record<string, unknown>) };
+      delete cleaned.autoShareEnabled;
+      delete cleaned.groupsPerRun;
+      return cleaned;
+    });
+  }
+
+  if (state.settings && typeof state.settings === 'object' && !Array.isArray(state.settings)) {
+    const settings = { ...(state.settings as Record<string, unknown>) };
+    delete settings.autoShare;
+    state.settings = settings;
+  }
+
+  return state;
 }

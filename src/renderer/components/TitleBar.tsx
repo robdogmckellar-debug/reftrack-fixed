@@ -2,7 +2,7 @@ import type { JSX } from 'preact';
 import { useEffect } from 'preact/hooks';
 
 import { activeScreenTitle } from '../app/store';
-import { LinkIcon, MinimizeIcon } from './icons';
+import { LinkIcon, MinimizeToTrayIcon } from './icons';
 import { AppClock } from './AppClock';
 import { PrimaryNavigation } from './PrimaryNavigation';
 
@@ -13,8 +13,8 @@ export function TitleBar(): JSX.Element {
     document.title = `${screenTitle} · RefTrack`;
   }, [screenTitle]);
 
-  const minimize = (): void => {
-    void window.reftrack.window.minimize().catch(() => undefined);
+  const hideToTray = (): void => {
+    void window.reftrack.window.hideToTray().catch(() => undefined);
   };
 
   return (
@@ -35,11 +35,11 @@ export function TitleBar(): JSX.Element {
           <button
             type="button"
             class="app-titlebar__window-button"
-            title="Minimise to taskbar"
-            aria-label="Minimise to taskbar"
-            onClick={minimize}
+            title="Minimise to notification area"
+            aria-label="Minimise to notification area"
+            onClick={hideToTray}
           >
-            <MinimizeIcon size={16} />
+            <MinimizeToTrayIcon size={16} />
           </button>
         </div>
       </div>

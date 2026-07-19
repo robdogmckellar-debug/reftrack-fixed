@@ -2,8 +2,20 @@ import { BrowserWindow, session } from 'electron';
 import type { Session } from 'electron';
 
 import { ApplicationError } from '../services/application-error';
-import { buildClickScript, buildExistsScript, buildFillLoginScript } from './checkin-scripts';
-import type { ClickResult, ExistsResult, FillLoginResult } from './checkin-scripts';
+import {
+  buildClickScript,
+  buildExistsScript,
+  buildFillLoginScript,
+  buildReadCheckinStateScript,
+  buildVerifyCheckinStateScript,
+} from './checkin-scripts';
+import type {
+  CheckinPageState,
+  CheckinVerificationResult,
+  ClickResult,
+  ExistsResult,
+  FillLoginResult,
+} from './checkin-scripts';
 import type { CheckinRunOutcome, CheckinRunnerContext } from './types';
 
 const NAVIGATION_TIMEOUT_MS = 25_000;
@@ -177,6 +189,7 @@ async function performCheckin(
 
   await dismissPopup(window, context, dismissSelectors);
 
+  const beforeCheckin = await execute<CheckinPageState>(window, buildReadCheckinStateScript());
   const checkinClicked = await pollAndClick(
     window,
     checkinSelectors,
@@ -189,12 +202,14 @@ async function performCheckin(
   }
 
   context.reportStage('verifying', `Confirming the check-in for ${context.siteName}…`);
-  const verified = await verifyCheckin(window, context);
-  if (!verified) {
-    return failure('The check-in was triggered but could not be confirmed.');
+  const verification = await verifyCheckin(window, context, beforeCheckin);
+  if (!verification.confirmed) {
+    return failure(
+      'The check-in button was clicked, but the page did not show a day increase or token reward.',
+    );
   }
 
-  return { status: 'success', message: `Checked in to ${context.siteName}.` };
+  return { status: 'success', message: successMessage(context.siteName, verification) };
 }
 
 async function dismissPopup(
@@ -219,19 +234,26 @@ async function dismissPopup(
 async function verifyCheckin(
   window: BrowserWindow,
   context: CheckinRunnerContext,
-): Promise<boolean> {
-  const successSelector = context.selectors.successSelector.trim();
-  if (!successSelector) {
+  beforeCheckin: CheckinPageState | null,
+): Promise<CheckinVerificationResult> {
+  for (let attempt = 0; attempt < VERIFY_POLL_ATTEMPTS; attempt += 1) {
+    ensureNotAborted(context.signal);
+    const result = await execute<CheckinVerificationResult>(
+      window,
+      buildVerifyCheckinStateScript(beforeCheckin),
+    );
+    if (result?.confirmed) return result;
     await abortableDelay(VERIFY_POLL_INTERVAL_MS, context.signal);
-    return true;
   }
-  return pollForElement(
-    window,
-    [successSelector],
-    VERIFY_POLL_ATTEMPTS,
-    VERIFY_POLL_INTERVAL_MS,
-    context.signal,
-  );
+
+  return {
+    confirmed: false,
+    reason: null,
+    dayBefore: beforeCheckin?.day ?? null,
+    dayAfter: null,
+    tokenDelta: null,
+    tokensToday: null,
+  };
 }
 
 async function pollForElement(
@@ -279,6 +301,22 @@ function currentUrl(window: BrowserWindow): string | null {
   if (window.isDestroyed() || window.webContents.isDestroyed()) return null;
   const url = window.webContents.getURL();
   return url || null;
+}
+
+function successMessage(siteName: string, verification: CheckinVerificationResult): string {
+  const parts = [`Checked in to ${siteName}.`];
+  if (
+    verification.dayBefore !== null &&
+    verification.dayAfter !== null &&
+    verification.dayAfter > verification.dayBefore
+  ) {
+    parts.push(`Check-in day advanced from ${verification.dayBefore} to ${verification.dayAfter}.`);
+  }
+  const tokens = verification.tokenDelta ?? verification.tokensToday;
+  if (tokens !== null && tokens > 0) {
+    parts.push(`Confirmed ${tokens} token${tokens === 1 ? '' : 's'} received today.`);
+  }
+  return parts.join(' ');
 }
 
 function createIsolatedSession(runId: string, taskSiteId: string): Session {
